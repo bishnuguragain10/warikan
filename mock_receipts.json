@@ -1,0 +1,95 @@
+[
+  {
+    "store": "AEON Supermarket (イオン)",
+    "date": "2026-05-28",
+    "total": 2570,
+    "paidBy": "Bishnu",
+    "items": [
+      {
+        "japanese": "牛乳 1L",
+        "english": "Milk 1L",
+        "price": 210,
+        "assignedTo": "shared",
+        "confidence": "high"
+      },
+      {
+        "japanese": "食パン 6枚切",
+        "english": "Sliced Bread (6pcs)",
+        "price": 160,
+        "assignedTo": "shared",
+        "confidence": "high"
+      },
+      {
+        "japanese": "プレミアムビール",
+        "english": "Premium Beer",
+        "price": 320,
+        "assignedTo": "Bishnu",
+        "confidence": "medium"
+      },
+      {
+        "japanese": "化粧水 ハトムギ",
+        "english": "Skin Lotion (Hatomugi)",
+        "price": 1200,
+        "assignedTo": "Radha",
+        "confidence": "high"
+      },
+      {
+        "japanese": "卵 10個入",
+        "english": "Eggs (10pcs)",
+        "price": 230,
+        "assignedTo": "shared",
+        "confidence": "high"
+      },
+      {
+        "japanese": "トイレットペーパー 12R",
+        "english": "Toilet Paper 12R",
+        "price": 450,
+        "assignedTo": "shared",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "store": "7-Eleven (セブンイレブン)",
+    "date": "2026-05-27",
+    "total": 920,
+    "paidBy": "Radha",
+    "items": [
+      {
+        "japanese": "ポテトチップス 塩",
+        "english": "Potato Chips (Salt)",
+        "price": 150,
+        "assignedTo": "shared",
+        "confidence": "high"
+      },
+      {
+        "japanese": "おにぎり 紅鮭",
+        "english": "Salmon Onigiri",
+        "price": 170,
+        "assignedTo": "Bishnu",
+        "confidence": "low"
+      },
+      {
+        "japanese": "緑茶 500ml",
+        "english": "Green Tea 500ml",
+        "price": 140,
+        "assignedTo": "Radha",
+        "confidence": "low"
+      },
+      {
+        "japanese": "カップヌードル",
+        "english": "Cup Noodles",
+        "price": 240,
+        "assignedTo": "shared",
+        "confidence": "high"
+      },
+      {
+        "japanese": "チョコモナカジャンボ",
+        "english": "Choco Monaka Ice Cream",
+        "price": 220,
+        "assignedTo": "unassigned",
+        "confidence": "none"
+      }
+    ]
+  }
+]

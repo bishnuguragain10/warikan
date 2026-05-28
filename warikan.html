@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warikan Hub - Roommate Bill Splitter & Japanese OCR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="warikan.css">
+  <!-- Tesseract.js local client-side OCR library -->
+  <script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- LEFT SIDEBAR: Real-time calculation & settlement summary -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <span class="brand-name">Warikan Hub</span>
+      </div>
+
+      <div class="sidebar-scroll">
+        <!-- Monthly Settlement Engine Box -->
+        <div class="card settlement-card">
+          <h3 class="card-title">Settlement Engine</h3>
+          <div class="settlement-banner" id="settlement-banner">
+            <div class="settlement-loader">Initializing calculator...</div>
+          </div>
+        </div>
+
+        <!-- Roommate Breakdown Counters -->
+        <div class="card statistics-card">
+          <h3 class="card-title">Monthly Ledger Breakdown</h3>
+          <div class="stats-list">
+            <!-- Bishnu Spent -->
+            <div class="stat-item">
+              <div class="stat-meta">
+                <span class="avatar avatar-b">B</span>
+                <span class="stat-label">Bishnu Paid Total</span>
+              </div>
+              <span class="stat-val" id="total-paid-b">¥0</span>
+            </div>
+            <!-- Radha Spent -->
+            <div class="stat-item">
+              <div class="stat-meta">
+                <span class="avatar avatar-r">R</span>
+                <span class="stat-label">Radha Paid Total</span>
+              </div>
+              <span class="stat-val" id="total-paid-r">¥0</span>
+            </div>
+            <hr class="stats-divider">
+            <!-- Shared Total -->
+            <div class="stat-item">
+              <div class="stat-meta">
+                <span class="avatar avatar-s">👥</span>
+                <span class="stat-label">Shared Expenses</span>
+              </div>
+              <span class="stat-val" id="total-shared">¥0</span>
+            </div>
+            <!-- Individual Total -->
+            <div class="stat-item">
+              <div class="stat-meta">
+                <span class="avatar avatar-s">👤</span>
+                <span class="stat-label">Individual Debits</span>
+              </div>
+              <span class="stat-val" id="total-individual">¥0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Google Sheets Cloud Sync Settings -->
+        <div class="card sync-settings-card">
+          <h3 class="card-title">Cloud Sync (Google Sheets)</h3>
+          <div class="form-group" style="margin-bottom:8px;">
+            <input type="text" id="sheets-sync-url" placeholder="Paste Web App URL here" style="width:100%; font-size:11px; padding:8px; background:rgba(10,12,18,0.5); border:1px solid var(--border); border-radius:6px; color:var(--text); outline:none;">
+          </div>
+          <button id="btn-save-sync" class="btn btn-secondary" style="padding: 6px 12px; font-size:11.5px; background: var(--primary); border:none; box-shadow: 0 4px 10px var(--primary-glow);">Save & Sync Cloud</button>
+        </div>
+
+        <!-- Ledger Actions -->
+        <div class="card action-card">
+          <h3 class="card-title">Ledger Actions</h3>
+          <button id="btn-manual-form" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Log Manual Expense</span>
+          </button>
+          <button id="btn-export-csv" class="btn btn-secondary" style="margin-top: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Export to Sheet (CSV)</span>
+          </button>
+          <button id="btn-clear-ledger" class="btn btn-danger" style="margin-top: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span>Clear This Month</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- RIGHT PANEL: Receipt Uploader & Monthly List -->
+    <main class="main-content">
+      <!-- Section 1: Japanese OCR Upload Center -->
+      <section class="section">
+        <h2 class="section-heading">Step 1: Japanese Receipt Scan</h2>
+        
+        <div class="scanner-grid">
+          <!-- Image Drop Uploader -->
+          <div class="card upload-box" id="drop-zone">
+            <svg class="upload-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            <h3>Upload Japanese Receipt</h3>
+            <p>Drag & drop or click to upload receipt image (JPEG, PNG)</p>
+            <input type="file" id="file-input" accept="image/*" capture="environment" style="display: none;">
+            
+            <div class="loader-overlay" id="ocr-loader" style="display: none;">
+              <div class="spinner"></div>
+              <div class="loader-text" id="ocr-progress">Reading Japanese Characters... 0%</div>
+            </div>
+          </div>
+
+          <!-- Quick Interactive Tester Mocks -->
+          <div class="card tester-box">
+            <h3 class="card-title">Instant Supermarket Receipt Tester</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+              Don't have a Japanese receipt photo right now? Load these authentic supermarket/convenience store mock templates to test the AI translation, dropdown splits, and balances immediately:
+            </p>
+            <div class="tester-buttons">
+              <button id="btn-load-mock-aeon" class="btn btn-tester">🛒 Load AEON Supermarket Receipt</button>
+              <button id="btn-load-mock-711" class="btn btn-tester" style="margin-top: 8px;">🏪 Load 7-Eleven Receipt</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Scanned Interactive Receipt Splitter Editor -->
+      <section class="section" id="section-receipt-editor" style="display: none;">
+        <h2 class="section-heading">Step 2: Scanned Line-Item Splitter</h2>
+        <div class="card receipt-editor-card">
+          <div class="receipt-editor-header">
+            <div>
+              <h3 id="receipt-store-name">Japanese Bill Analysis</h3>
+              <div style="margin-top:6px; display:flex; align-items:center; gap:8px;">
+                <label for="receipt-date" style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em;">Bill Date:</label>
+                <input type="date" id="receipt-date" style="background:rgba(10,12,18,0.6); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:4px 8px; font-size:12px; outline:none; font-family:var(--font-body);">
+              </div>
+            </div>
+            <div class="who-paid-selection">
+              <label for="receipt-payer">Who Paid This Bill?</label>
+              <select id="receipt-payer">
+                <option value="Bishnu">👤 Bishnu Paid</option>
+                <option value="Radha">👤 Radha Paid</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="receipt-items-container">
+            <table class="receipt-table">
+              <thead>
+                <tr>
+                  <th>Japanese Product Name</th>
+                  <th>English Translation</th>
+                  <th style="width: 100px; text-align: right;">Price (Yen)</th>
+                  <th style="width: 200px; text-align: center;">Who is this for?</th>
+                </tr>
+              </thead>
+              <tbody id="receipt-items-body">
+                <!-- Dynamic parsed rows go here -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="receipt-editor-actions">
+            <button id="btn-commit-receipt" class="btn btn-primary" style="padding: 12px 24px;">
+              💾 Save Scanned Items to Monthly Ledger
+            </button>
+            <button id="btn-cancel-receipt" class="btn btn-secondary">Cancel Scan</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Monthly Expenses Table -->
+      <section class="section">
+        <h2 class="section-heading">Step 3: Cumulative Monthly Ledger</h2>
+        <div class="card ledger-card">
+          <div class="ledger-table-container">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Store / Item Description</th>
+                  <th style="text-align: center;">Paid By</th>
+                  <th style="text-align: right;">Cost (Yen)</th>
+                  <th style="text-align: center;">Split Assignment</th>
+                  <th style="text-align: right;">Bishnu's Share</th>
+                  <th style="text-align: right;">Radha's Share</th>
+                  <th style="width: 60px; text-align: center;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="ledger-body">
+                <!-- Ledger rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL: MANUAL EXPENSE ENTRY -->
+  <div id="manual-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Log Manual Roommate Expense</h2>
+        <button class="close-modal" id="close-manual-modal">&times;</button>
+      </div>
+      <form id="manual-form" class="modal-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="manual-date">Date</label>
+            <input type="date" id="manual-date" required>
+          </div>
+          <div class="form-group">
+            <label for="manual-payer">Who Paid?</label>
+            <select id="manual-payer" required>
+              <option value="Bishnu">Bishnu</option>
+              <option value="Radha">Radha</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="manual-store">Item Description (e.g. Rent, Gas Bill, Cash)</label>
+          <input type="text" id="manual-store" required placeholder="e.g. Electricity Bill, Gyomu Supermarket">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="manual-cost">Total Cost (¥)</label>
+            <input type="number" id="manual-cost" min="1" required placeholder="Yen Amount">
+          </div>
+          <div class="form-group">
+            <label for="manual-split">Split Assignment</label>
+            <select id="manual-split" required>
+              <option value="shared">👥 Split 50/50 (Shared)</option>
+              <option value="Bishnu">👤 100% Bishnu</option>
+              <option value="Radha">👤 100% Radha</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; margin-top: 10px;">
+          Add Expense to Ledger
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="warikan.js"></script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Auto-Logger Options</title>
+  <style>
+    :root {
+      --bg: #0c0f17;
+      --card-bg: rgba(22, 28, 45, 0.65);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #4f46e5;
+      --primary-glow: rgba(79, 70, 229, 0.4);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.4);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      background-color: var(--bg);
+      font-family: var(--font);
+      color: var(--text);
+      box-sizing: border-box;
+      overflow-x: hidden;
+    }
+
+    /* Vibrant glassmorphism card header */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      box-shadow: 0 0 12px var(--primary-glow);
+    }
+
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+      background: linear-gradient(to right, #a5b4fc, #e9d5ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin: 0;
+    }
+
+    /* Core container cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0;
+      margin-bottom: 12px;
+    }
+
+    /* Primary Launch Button */
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(79, 70, 229, 0.6);
+      filter: brightness(1.1);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      box-shadow: none;
+      margin-top: 8px;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      box-shadow: none;
+      transform: none;
+    }
+
+    /* Settings inputs */
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      background: rgba(10, 12, 18, 0.8);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 12px;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 6px var(--primary-glow);
+    }
+
+    /* Live connection status */
+    .status-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 11px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot-active {
+      background-color: var(--success);
+      box-shadow: 0 0 8px var(--success-glow);
+    }
+
+    .dot-inactive {
+      background-color: #ef4444;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">W</div>
+    <h1 class="title">Launchpad Hub</h1>
+  </div>
+
+  <div class="card">
+    <button id="open-dashboard" class="btn">🚀 Open Launchpad Dashboard</button>
+    <button id="log-current" class="btn btn-secondary">📌 Save Current Tab</button>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Google Sheets Sync</h2>
+    <div class="form-group">
+      <label for="webhook-url">Google Apps Script Web App URL</label>
+      <input type="text" id="webhook-url" placeholder="https://script.google.com/macros/s/.../exec">
+    </div>
+    <button id="save-webhook" class="btn" style="padding: 8px; font-size: 12px; background: var(--primary);">Save Connection</button>
+    
+    <div class="status-container">
+      <span>Sync Status:</span>
+      <div id="sync-status" class="status-indicator">
+        <span id="status-dot" class="dot dot-inactive"></span>
+        <span id="status-text" style="color: #ef4444;">Not Linked</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Web Auto-Logger &bull; Private & Secure
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

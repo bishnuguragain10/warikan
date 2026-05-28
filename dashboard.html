@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Premium Web Launchpad & Directory</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <span class="brand-name">Launchpad Hub</span>
+      </div>
+
+      <nav class="nav-menu">
+        <span class="nav-title">CATEGORIES</span>
+        <button class="nav-item active" data-category="all">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+          <span>All Platforms</span>
+          <span class="count" id="count-all">0</span>
+        </button>
+        <button class="nav-item" data-category="🤖 AI Chatbots & Writing">
+          <span>🤖 AI Chatbots</span>
+          <span class="count" id="count-ai-chats">0</span>
+        </button>
+        <button class="nav-item" data-category="🎨 AI Image Generators">
+          <span>🎨 AI Image Art</span>
+          <span class="count" id="count-ai-images">0</span>
+        </button>
+        <button class="nav-item" data-category="🎥 AI Video & Audio">
+          <span>🎥 AI Video/Audio</span>
+          <span class="count" id="count-ai-videos">0</span>
+        </button>
+        <button class="nav-item" data-category="💻 Developer Tools & Cloud">
+          <span>💻 Dev & Cloud</span>
+          <span class="count" id="count-dev">0</span>
+        </button>
+        <button class="nav-item" data-category="🛍️ E-Commerce & Shopping">
+          <span>🛍️ E-Commerce</span>
+          <span class="count" id="count-shop">0</span>
+        </button>
+        <button class="nav-item" data-category="📱 Social Media & Networking">
+          <span>📱 Social Media</span>
+          <span class="count" id="count-social">0</span>
+        </button>
+        <button class="nav-item" data-category="🎥 Entertainment & Media">
+          <span>🎥 Media & Play</span>
+          <span class="count" id="count-media">0</span>
+        </button>
+        <button class="nav-item" data-category="💼 Work & Productivity">
+          <span>💼 Workspace</span>
+          <span class="count" id="count-work">0</span>
+        </button>
+        <button class="nav-item" data-category="🌐 General / Personal Website">
+          <span>🌐 General Sites</span>
+          <span class="count" id="count-general">0</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sync-banner">
+          <div class="sync-banner-header">
+            <span class="sync-title">Sheets Integration</span>
+            <span id="sync-badge" class="sync-dot"></span>
+          </div>
+          <p id="sync-desc" class="sync-text">Automatically syncs entries to Google Sheets.</p>
+          <button id="open-sync-guide" class="btn-banner">Connection Guide</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace Content -->
+    <main class="main-content">
+      <!-- Top Action Bar -->
+      <header class="header">
+        <div class="search-container">
+          <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" placeholder="Search saved platforms, links, descriptions...">
+        </div>
+
+        <div class="action-buttons">
+          <button id="btn-manual-add" class="action-btn action-btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Add Platform</span>
+          </button>
+          <button id="btn-csv" class="action-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Export to CSV</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Dynamic Platform Dashboard Grid -->
+      <div class="grid-section">
+        <h2 id="active-category-title" class="section-title">All Platforms</h2>
+        <div id="platform-grid" class="platform-grid">
+          <!-- Dynamic cards injected via JS -->
+        </div>
+
+        <!-- Empty State UI -->
+        <div id="empty-state" class="empty-state" style="display: none;">
+          <div class="empty-icon">📂</div>
+          <h3>No platforms found</h3>
+          <p>Start browsing websites and log in, or click "Add Platform" to create an entry manually!</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL: ADD MANUAL PLATFORM -->
+  <div id="add-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Add New Web Platform</h2>
+        <button class="close-modal" id="close-add-modal">&times;</button>
+      </div>
+      <form id="add-form" class="modal-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="add-title">Website Name</label>
+            <input type="text" id="add-title" required placeholder="e.g. ChatGPT">
+          </div>
+          <div class="form-group">
+            <label for="add-url">Website Link</label>
+            <input type="url" id="add-url" required placeholder="e.g. https://chatgpt.com">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="add-category">Category</label>
+          <select id="add-category" required>
+            <option value="🤖 AI Chatbots & Writing">🤖 AI Chatbots & Writing</option>
+            <option value="🎨 AI Image Generators">🎨 AI Image Generators</option>
+            <option value="🎥 AI Video & Audio">🎥 AI Video & Audio</option>
+            <option value="💻 Developer Tools & Cloud">💻 Developer Tools & Cloud</option>
+            <option value="🛍️ E-Commerce & Shopping">🛍️ E-Commerce & Shopping</option>
+            <option value="📱 Social Media & Networking">📱 Social Media & Networking</option>
+            <option value="🎥 Entertainment & Media">🎥 Entertainment & Media</option>
+            <option value="💼 Work & Productivity">💼 Work & Productivity</option>
+            <option value="🌐 General / Personal Website">🌐 General / Personal Website</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="add-desc">Short Website Work / Purpose Description</label>
+          <textarea id="add-desc" rows="3" required placeholder="e.g. Generative AI chatbot used for writing code, planning, and brainstorming ideas."></textarea>
+        </div>
+
+        <button type="submit" class="action-btn action-btn-primary" style="width: 100%; margin-top: 10px;">Save Web Platform</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: GOOGLE SHEETS SETUP GUIDE -->
+  <div id="guide-modal" class="modal-overlay">
+    <div class="modal-card modal-large">
+      <div class="modal-header">
+        <h2>Google Sheets Direct Integration Guide</h2>
+        <button class="close-modal" id="close-guide-modal">&times;</button>
+      </div>
+      <div class="modal-content">
+        <p>You can sync all website entries <strong>automatically in real-time</strong> directly to Google Sheets by creating a private webapp. Follow these simple steps:</p>
+        
+        <ol class="guide-list">
+          <li>Create a new, blank spreadsheet in your Google Sheets account.</li>
+          <li>In your Google Sheet, select <strong>Extensions</strong> in the top menu, then click <strong>Apps Script</strong>.</li>
+          <li>Delete any existing code in the editor, and copy-paste the entire code from the <code>google_apps_script.js</code> file created in your extension folder.</li>
+          <li>Click the <strong>Save</strong> icon (floppy disk) in the Apps Script toolbar.</li>
+          <li>Click <strong>Deploy</strong> (top right) &gt; select <strong>New Deployment</strong>.</li>
+          <li>Click the <strong>Settings</strong> icon next to Deploy &gt; select <strong>Web App</strong>.</li>
+          <li>Configure the Web App settings precisely:
+            <ul>
+              <li><strong>Description:</strong> <code>Launchpad Connector</code></li>
+              <li><strong>Execute as:</strong> <code>Me (your-email)</code></li>
+              <li><strong>Who has access:</strong> <code>Anyone</code> (This is safe as your script URL remains completely secret).</li>
+            </ul>
+          </li>
+          <li>Click <strong>Deploy</strong>, authorize the permissions, and copy the generated <strong>Web App URL</strong>.</li>
+          <li>Paste the Web App URL in your Chrome Extension popup menu and click <strong>Save Connection</strong>.</li>
+        </ol>
+
+        <div class="code-box-header">
+          <span>google_apps_script.js Code</span>
+          <button id="btn-copy-code" class="copy-btn">Copy Code</button>
+        </div>
+        <pre class="code-box"><code id="code-snippet">
+// Google Sheets Connector Script (Ready to Copy)
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    
+    // Set headers if empty sheet
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow(["Website Name", "Category", "Description", "Clickable Launch Link", "Domain Key", "Date Added"]);
+      sheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#e0e7ff");
+    }
+    
+    // Make link clickable using Sheet formula
+    const linkFormula = `=HYPERLINK("${data.url}", "Launch Site")`;
+    
+    // Append the website metadata securely
+    sheet.appendRow([
+      data.title,
+      data.category,
+      data.description,
+      linkFormula,
+      data.domain,
+      new Date(data.timestamp).toLocaleString()
+    ]);
+    
+    return ContentService.createTextOutput(JSON.stringify({status: "success"}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+        </code></pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

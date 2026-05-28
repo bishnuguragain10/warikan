@@ -1,0 +1,782 @@
+// warikan.js
+// Handles local Tesseract OCR, Japanese translation maps, split selectors, manual entry forms, and settlement math
+
+let currentLedger = [];
+let currentScannedItems = [];
+
+// Local Japanese Translation & Assignment Heuristics Map
+const JPN_DICTIONARY = {
+  "牛乳": { english: "Milk", category: "shared" },
+  "食パン": { english: "Sliced Bread", category: "shared" },
+  "パン": { english: "Pastry/Bread", category: "shared" },
+  "ビール": { english: "Beer", category: "Bishnu" },
+  "酒": { english: "Alcohol", category: "Bishnu" },
+  "化粧水": { english: "Skin Lotion", category: "Radha" },
+  "コスメ": { english: "Cosmetics", category: "Radha" },
+  "卵": { english: "Eggs", category: "shared" },
+  "トイレットペーパー": { english: "Toilet Paper", category: "shared" },
+  "洗剤": { english: "Detergent", category: "shared" },
+  "シャンプー": { english: "Shampoo", category: "shared" },
+  "リンス": { english: "Hair Conditioner", category: "shared" },
+  "醤油": { english: "Soy Sauce", category: "shared" },
+  "塩": { english: "Salt", category: "shared" },
+  "肉": { english: "Meat", category: "shared" },
+  "豚肉": { english: "Pork", category: "shared" },
+  "牛肉": { english: "Beef", category: "shared" },
+  "鶏肉": { english: "Chicken", category: "shared" },
+  "水": { english: "Bottled Water", category: "shared" },
+  "茶": { english: "Green Tea", category: "shared" },
+  "ポテトチップス": { english: "Potato Chips", category: "shared" },
+  "おにぎり": { english: "Onigiri (Rice Ball)", category: "unassigned" },
+  "弁当": { english: "Bento Box", category: "unassigned" },
+  "カップヌードル": { english: "Cup Noodles", category: "shared" },
+  "ラーメン": { english: "Ramen", category: "shared" },
+  "ティッシュ": { english: "Kleenex Tissues", category: "shared" },
+  "ゴミ袋": { english: "Trash Bags", category: "shared" }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Elements
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const ocrLoader = document.getElementById('ocr-loader');
+  const ocrProgress = document.getElementById('ocr-progress');
+  
+  // Scanned receipt editor
+  const sectionReceiptEditor = document.getElementById('section-receipt-editor');
+  const receiptStoreName = document.getElementById('receipt-store-name');
+  const receiptDateInput = document.getElementById('receipt-date');
+  const receiptPayer = document.getElementById('receipt-payer');
+  const receiptItemsBody = document.getElementById('receipt-items-body');
+  const btnCommitReceipt = document.getElementById('btn-commit-receipt');
+  const btnCancelReceipt = document.getElementById('btn-cancel-receipt');
+
+  // Ledger Table
+  const ledgerBody = document.getElementById('ledger-body');
+  
+  // Statistics Elements
+  const totalPaidB = document.getElementById('total-paid-b');
+  const totalPaidR = document.getElementById('total-paid-r');
+  const totalShared = document.getElementById('total-shared');
+  const totalIndividual = document.getElementById('total-individual');
+  const settlementBanner = document.getElementById('settlement-banner');
+
+  // Manual Modal
+  const manualModal = document.getElementById('manual-modal');
+  const btnManualForm = document.getElementById('btn-manual-form');
+  const closeManualModal = document.getElementById('close-manual-modal');
+  const manualForm = document.getElementById('manual-form');
+
+  // Main Actions
+  const btnExportCsv = document.getElementById('btn-export-csv');
+  const btnClearLedger = document.getElementById('btn-clear-ledger');
+  
+  // Tester Buttons
+  const btnLoadMockAeon = document.getElementById('btn-load-mock-aeon');
+  const btnLoadMock711 = document.getElementById('btn-load-mock-711');
+
+  // Cloud Sync Elements
+  const sheetsSyncUrlInput = document.getElementById('sheets-sync-url');
+  const btnSaveSync = document.getElementById('btn-save-sync');
+
+  // --- INITIAL RUN ---
+  // Load saved Sync URL
+  const savedSyncUrl = localStorage.getItem('warikanSyncUrl') || '';
+  if (sheetsSyncUrlInput) {
+    sheetsSyncUrlInput.value = savedSyncUrl;
+  }
+
+  if (btnSaveSync) {
+    btnSaveSync.addEventListener('click', () => {
+      const url = sheetsSyncUrlInput.value.trim();
+      if (url === '') {
+        localStorage.removeItem('warikanSyncUrl');
+        alert('Google Sheets Sync URL cleared.');
+        loadLedger();
+        return;
+      }
+      if (!url.startsWith('https://script.google.com/')) {
+        alert('Invalid Web App URL. Must start with https://script.google.com/');
+        return;
+      }
+      localStorage.setItem('warikanSyncUrl', url);
+      alert('Google Sheets URL saved. Syncing with cloud...');
+      fetchLedgerFromCloud();
+    });
+  }
+
+  loadLedger();
+
+  // --- DRAG & DROP FILE LISTENERS ---
+  dropZone.addEventListener('click', () => fileInput.click());
+  
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      processReceiptImage(e.target.files[0]);
+    }
+  });
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = 'var(--primary)';
+  });
+
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+    if (e.dataTransfer.files.length > 0) {
+      processReceiptImage(e.dataTransfer.files[0]);
+    }
+  });
+
+  // --- MOCK LOADER LISTENERS (FOR FAST TESTING) ---
+  btnLoadMockAeon.addEventListener('click', () => loadMockTemplate(0));
+  btnLoadMock711.addEventListener('click', () => loadMockTemplate(1));
+
+  // --- TESSERACT CLIENT-SIDE OCR ENGINE ---
+  async function processReceiptImage(file) {
+    ocrLoader.style.display = 'flex';
+    ocrProgress.innerText = "Initializing OCR engine...";
+
+    try {
+      // Create a local Tesseract worker targeting Japanese
+      const worker = await Tesseract.createWorker({
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            ocrProgress.innerText = `Parsing Japanese characters: ${Math.round(m.progress * 100)}%`;
+          }
+        }
+      });
+      
+      await worker.loadLanguage('jpn');
+      await worker.initialize('jpn');
+      
+      // Run the image character recognition
+      const { data: { text } } = await worker.recognize(file);
+      await worker.terminate();
+      
+      ocrLoader.style.display = 'none';
+      parseOcrText(text);
+      
+    } catch (error) {
+      ocrLoader.style.display = 'none';
+      console.error(error);
+      alert("Error parsing image. Falling back to a mock template for demo safety.");
+      // Fallback in case of sandboxed network block on CDN Tesseract worker files
+      loadMockTemplate(0);
+    }
+  }
+
+  // --- DATE EXTRACTION ENGINE (Extracts Japanese date formatting) ---
+  function extractDateFromText(text) {
+    // 1. Western YYYY/MM/DD or YYYY-MM-DD or YYYY.MM.DD
+    const pattern1 = /(\d{4})[/\-\.](\d{1,2})[/\-\.](\d{1,2})/;
+    const match1 = text.match(pattern1);
+    if (match1) {
+      const y = match1[1];
+      const m = match1[2].padStart(2, '0');
+      const d = match1[3].padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    // 2. Japanese Kanji YYYY年MM月DD日
+    const pattern2 = /(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/;
+    const match2 = text.match(pattern2);
+    if (match2) {
+      const y = match2[1];
+      const m = match2[2].padStart(2, '0');
+      const d = match2[3].padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    // 3. Short Year YY/MM/DD (e.g. 26/05/28 or 26.05.28 - representing 2026)
+    const pattern3 = /\b(\d{2})[/\-\.](\d{2})[/\-\.](\d{2})\b/;
+    const match3 = text.match(pattern3);
+    if (match3) {
+      const y = "20" + match3[1];
+      const m = match3[2].padStart(2, '0');
+      const d = match3[3].padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    // Fallback: today YYYY-MM-DD
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  // --- HEURISTIC OCR TEXT PARSING ALGORITHM ---
+  function parseOcrText(text) {
+    const lines = text.split('\n');
+    currentScannedItems = [];
+
+    lines.forEach(line => {
+      const cleanLine = line.trim();
+      if (cleanLine.length < 3) return; // ignore short debris lines
+
+      // Heuristic: Search for Yen amounts or prices at the end of the line (e.g. 240, 1,200, ¥350)
+      const priceMatch = cleanLine.match(/[¥\\]?\s*([0-9,]{3,7})\s*$/);
+      if (priceMatch) {
+        const priceVal = parseInt(priceMatch[1].replace(/,/g, ''));
+        
+        // Remove the price values to isolate the product text name
+        let jpnName = cleanLine.substring(0, priceMatch.index).trim();
+        // Strip off common receipt characters like * 軽 %
+        jpnName = jpnName.replace(/[¥\\*軽%•\-#]/g, '').trim();
+
+        if (jpnName.length >= 2 && priceVal > 0) {
+          // Attempt Japanese Translation & Auto-Assignment heuristics
+          const translationResult = translateAndCategorize(jpnName);
+          
+          currentScannedItems.push({
+            japanese: jpnName,
+            english: translationResult.english,
+            price: priceVal,
+            assignedTo: translationResult.category,
+            confidence: translationResult.category === 'unassigned' ? 'none' : 'high'
+          });
+        }
+      }
+    });
+
+    if (currentScannedItems.length === 0) {
+      alert("Could not extract any product prices from this photo. Loading AEON template as a guide.");
+      loadMockTemplate(0);
+      return;
+    }
+
+    // Set editor UI state
+    receiptStoreName.innerText = "Scanned Supermarket / Store Bill";
+    
+    // Auto extract and prefill scanned date
+    const scannedDate = extractDateFromText(text);
+    receiptDateInput.value = scannedDate;
+    
+    receiptPayer.value = "Bishnu";
+    
+    renderReceiptEditor();
+  }
+
+  // --- DYNAMIC DICTIONARY LOOKUP & TRANSLATION ENGINE ---
+  function translateAndCategorize(jpnText) {
+    // Exact or partial match checks against JPN dictionary
+    for (const key in JPN_DICTIONARY) {
+      if (jpnText.toLowerCase().includes(key)) {
+        return JPN_DICTIONARY[key];
+      }
+    }
+    
+    // Default fallback if no match found
+    return { english: "Imported Grocery/Item", category: "unassigned" };
+  }
+
+  // --- LOAD SAMPLE TEMPLATES ---
+  function loadMockTemplate(index) {
+    // Fetch from mock_receipts.json template data
+    fetch('mock_receipts.json')
+      .then(res => res.json())
+      .then(data => {
+        const template = data[index];
+        receiptStoreName.innerText = template.store;
+        receiptDateInput.value = template.date;
+        receiptPayer.value = template.paidBy;
+        currentScannedItems = template.items;
+        
+        renderReceiptEditor();
+      })
+      .catch(err => {
+        console.error('Error loading mock data:', err);
+        alert('Could not load mock templates.');
+      });
+  }
+
+  // --- RENDER DYNAMIC CARD EDITOR SPLITTER ---
+  function renderReceiptEditor() {
+    receiptItemsBody.innerHTML = '';
+    sectionReceiptEditor.style.display = 'block';
+    
+    // Scroll down to editor smoothly
+    sectionReceiptEditor.scrollIntoView({ behavior: 'smooth' });
+
+    currentScannedItems.forEach((item, index) => {
+      const tr = document.createElement('tr');
+      
+      // Check if unassigned (shows orange highlight alert)
+      if (item.assignedTo === 'unassigned') {
+        tr.className = 'row-unassigned';
+      }
+
+      tr.innerHTML = `
+        <td>
+          ${item.assignedTo === 'unassigned' ? '<span class="warning-dot"></span>' : ''}
+          ${escapeHTML(item.japanese)}
+        </td>
+        <td>
+          <input type="text" class="edit-english" data-index="${index}" value="${escapeHTML(item.english)}" style="background:transparent; border:none; color:var(--text-muted); width:100%; font-size:13px; outline:none; border-bottom:1px dashed var(--border);">
+        </td>
+        <td style="text-align: right; font-weight:700;">¥${item.price.toLocaleString()}</td>
+        <td style="text-align: center;">
+          <div class="segment-control">
+            <button class="segment-btn ${item.assignedTo === 'Bishnu' ? 'active' : ''}" data-index="${index}" data-split="Bishnu">Bishnu</button>
+            <button class="segment-btn ${item.assignedTo === 'Radha' ? 'active' : ''}" data-index="${index}" data-split="Radha">Radha</button>
+            <button class="segment-btn ${item.assignedTo === 'shared' ? 'active' : ''}" data-index="${index}" data-split="shared">👥 Shared</button>
+          </div>
+        </td>
+      `;
+
+      // Segment click choices
+      tr.querySelectorAll('.segment-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+          const split = e.currentTarget.getAttribute('data-split');
+          
+          currentScannedItems[idx].assignedTo = split;
+          
+          // Re-render editor row dynamically to update active states
+          tr.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
+          e.currentTarget.classList.add('active');
+          
+          if (split !== 'unassigned') {
+            tr.className = ''; // remove alert highlight
+            const dot = tr.querySelector('.warning-dot');
+            if (dot) dot.remove();
+          }
+        });
+      });
+
+      // English inputs change hook
+      tr.querySelector('.edit-english').addEventListener('change', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-index'));
+        currentScannedItems[idx].english = e.target.value;
+      });
+
+      receiptItemsBody.appendChild(tr);
+    });
+  }
+
+  // --- SAVE SCANNED ITEMS TO LEDGER ---
+  btnCommitReceipt.addEventListener('click', () => {
+    // Check if there are any unassigned items left
+    const unassignedCount = currentScannedItems.filter(i => i.assignedTo === 'unassigned').length;
+    if (unassignedCount > 0) {
+      alert(`Please assign who owns the ${unassignedCount} highlighted unassigned item(s) before saving!`);
+      return;
+    }
+
+    const payer = receiptPayer.value;
+    const store = receiptStoreName.innerText;
+    const selectedDate = receiptDateInput.value || new Date().toISOString().slice(0, 10);
+    const syncUrl = localStorage.getItem('warikanSyncUrl');
+
+    if (syncUrl) {
+      // Show loading overlay
+      ocrLoader.style.display = 'flex';
+      ocrProgress.innerText = "Syncing items to Google Sheets...";
+
+      // Perform parallel POST requests to the Google Sheets Web App
+      const promises = currentScannedItems.map(item => {
+        const newItem = {
+          date: selectedDate,
+          store: `${store} - ${item.english} (${item.japanese})`,
+          paidBy: payer,
+          cost: item.price,
+          assignedTo: item.assignedTo
+        };
+        return fetch(syncUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newItem)
+        });
+      });
+
+      Promise.all(promises).then(() => {
+        ocrLoader.style.display = 'none';
+        fetchLedgerFromCloud();
+        alert('All receipt items successfully synced directly to Google Sheets!');
+      }).catch(err => {
+        ocrLoader.style.display = 'none';
+        console.error("Error syncing items to Google Sheets:", err);
+        // Fallback: save locally
+        currentScannedItems.forEach(item => {
+          currentLedger.push({
+            date: selectedDate,
+            store: `${store} - ${item.english} (${item.japanese})`,
+            paidBy: payer,
+            cost: item.price,
+            assignedTo: item.assignedTo
+          });
+        });
+        saveLedger();
+      });
+    } else {
+      // Commit itemized items locally
+      currentScannedItems.forEach(item => {
+        currentLedger.push({
+          date: selectedDate,
+          store: `${store} - ${item.english} (${item.japanese})`,
+          paidBy: payer,
+          cost: item.price,
+          assignedTo: item.assignedTo
+        });
+      });
+      saveLedger();
+      alert('All receipt items successfully itemized and committed to your monthly ledger!');
+    }
+
+    sectionReceiptEditor.style.display = 'none';
+    currentScannedItems = [];
+  });
+
+  btnCancelReceipt.addEventListener('click', () => {
+    if (confirm('Cancel scan? Scanned lines will be lost.')) {
+      sectionReceiptEditor.style.display = 'none';
+      currentScannedItems = [];
+    }
+  });
+
+  // --- MANUAL EXPENSE ENTRY ACTION ---
+  btnManualForm.addEventListener('click', () => {
+    // Default today's date in form input
+    document.getElementById('manual-date').value = new Date().toISOString().slice(0, 10);
+    manualModal.classList.add('active');
+  });
+
+  closeManualModal.addEventListener('click', () => manualModal.classList.remove('active'));
+
+  window.addEventListener('click', (e) => {
+    if (e.target === manualModal) manualModal.classList.remove('active');
+  });
+
+  manualForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const date = document.getElementById('manual-date').value;
+    const payer = document.getElementById('manual-payer').value;
+    const desc = document.getElementById('manual-store').value.trim();
+    const cost = parseInt(document.getElementById('manual-cost').value);
+    const split = document.getElementById('manual-split').value;
+
+    const newItem = {
+      date: date,
+      store: desc,
+      paidBy: payer,
+      cost: cost,
+      assignedTo: split
+    };
+
+    const syncUrl = localStorage.getItem('warikanSyncUrl');
+    if (syncUrl) {
+      postExpenseToCloud(newItem);
+    } else {
+      currentLedger.push(newItem);
+      saveLedger();
+    }
+
+    manualForm.reset();
+    manualModal.classList.remove('active');
+  });
+
+  // --- CLOUD SYNCING FUNCTIONS (Google Sheets database) ---
+  async function fetchLedgerFromCloud() {
+    const syncUrl = localStorage.getItem('warikanSyncUrl');
+    if (!syncUrl) return;
+
+    settlementBanner.innerHTML = `
+      <div class="settlement-loader">
+        <div class="spinner" style="width:14px; height:16px;"></div>
+        <span>Syncing Cloud Sheet...</span>
+      </div>
+    `;
+
+    try {
+      const response = await fetch(syncUrl);
+      const data = await response.json();
+      
+      if (Array.isArray(data)) {
+        currentLedger = data;
+        localStorage.setItem('warikanLedger', JSON.stringify(currentLedger));
+        console.log("Successfully synced ledger from Google Sheets:", currentLedger);
+      }
+    } catch (error) {
+      console.error("Error fetching ledger from Google Sheets:", error);
+    } finally {
+      calculateSettlement();
+      renderLedgerTable();
+    }
+  }
+
+  async function postExpenseToCloud(item) {
+    const syncUrl = localStorage.getItem('warikanSyncUrl');
+    if (!syncUrl) return;
+
+    try {
+      await fetch(syncUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(item)
+      });
+      console.log("Successfully posted expense to cloud:", item);
+      
+      // Pull latest from cloud to ensure perfect sync
+      fetchLedgerFromCloud();
+    } catch (error) {
+      console.error("Error posting expense to cloud:", error);
+      // Fail-safe: Save locally
+      currentLedger.push(item);
+      saveLedger();
+    }
+  }
+
+  // --- LEDGER CONTROLLER & MATH ENGINE ---
+  function loadLedger() {
+    const raw = localStorage.getItem('warikanLedger');
+    if (raw) {
+      currentLedger = JSON.parse(raw);
+    } else {
+      currentLedger = [];
+    }
+    calculateSettlement();
+    renderLedgerTable();
+
+    // Automatically sync from cloud if linked
+    const syncUrl = localStorage.getItem('warikanSyncUrl');
+    if (syncUrl) {
+      fetchLedgerFromCloud();
+    }
+  }
+
+  function saveLedger() {
+    localStorage.setItem('warikanLedger', JSON.stringify(currentLedger));
+    calculateSettlement();
+    renderLedgerTable();
+  }
+
+  // --- THE SETTLEMENT MATH CALCULATOR ---
+  function calculateSettlement() {
+    let paidB = 0; // Total actually paid out of pocket by Bishnu
+    let paidR = 0; // Total actually paid out of pocket by Radha
+    let sharedSum = 0; // Total shared expenses
+    let individualSum = 0; // Total direct individual expenses
+    
+    let oweB = 0; // What Bishnu is responsible for
+    let oweR = 0; // What Radha is responsible for
+
+    currentLedger.forEach(item => {
+      const cost = item.cost;
+      
+      // 1. Calculate Payer totals
+      if (item.paidBy === 'Bishnu') {
+        paidB += cost;
+      } else {
+        paidR += cost;
+      }
+
+      // 2. Calculate Split responsibilities
+      if (item.assignedTo === 'shared') {
+        sharedSum += cost;
+        oweB += cost / 2;
+        oweR += cost / 2;
+      } else if (item.assignedTo === 'Bishnu') {
+        individualSum += cost;
+        oweB += cost;
+      } else if (item.assignedTo === 'Radha') {
+        individualSum += cost;
+        oweR += cost;
+      }
+    });
+
+    // Update Stats text
+    totalPaidB.innerText = `¥${paidB.toLocaleString()}`;
+    totalPaidR.innerText = `¥${paidR.toLocaleString()}`;
+    totalShared.innerText = `¥${sharedSum.toLocaleString()}`;
+    totalIndividual.innerText = `¥${individualSum.toLocaleString()}`;
+
+    // Net double-entry balance sheets:
+    // Net Balance = Paid - Owed.
+    const netB = paidB - oweB;
+    const netR = paidR - oweR;
+
+    settlementBanner.className = 'settlement-banner';
+
+    if (currentLedger.length === 0) {
+      settlementBanner.className = 'settlement-banner settlement-even';
+      settlementBanner.innerHTML = `
+        <div class="settlement-title">Ledger is Empty</div>
+        <div class="settlement-main" style="font-size:15px; color:var(--text-dim);">No transactions logged</div>
+        <div class="settlement-sub">Upload a Japanese receipt above to begin!</div>
+      `;
+      return;
+    }
+
+    // Render credit state visual boards
+    if (Math.abs(netB) < 1) {
+      settlementBanner.className = 'settlement-banner settlement-even';
+      settlementBanner.innerHTML = `
+        <div class="settlement-title">Perfectly Balanced</div>
+        <div class="settlement-main" style="color:var(--success);">¥0 Difference</div>
+        <div class="settlement-sub">Radha and Bishnu have completely clear accounts!</div>
+      `;
+    } else if (netB > 0) {
+      // Bishnu is in positive credit. Radha is in negative debt.
+      // Radha must pay Bishnu the credit difference!
+      settlementBanner.classList.add('settlement-b-credit');
+      settlementBanner.innerHTML = `
+        <div class="settlement-title">Account Settle Result</div>
+        <div class="settlement-main">Radha owes Bishnu</div>
+        <div style="font-size: 26px; font-weight:800; color:#34d399; margin: 4px 0;">¥${Math.round(netB).toLocaleString()}</div>
+        <div class="settlement-sub">Give this to Bishnu to clear this month's account.</div>
+      `;
+    } else {
+      // Radha is in positive credit. Bishnu is in negative debt.
+      // Bishnu must pay Radha the absolute debt difference!
+      const debtAmount = Math.abs(netB);
+      settlementBanner.classList.add('settlement-r-credit');
+      settlementBanner.innerHTML = `
+        <div class="settlement-title">Account Settle Result</div>
+        <div class="settlement-main">Bishnu owes Radha</div>
+        <div style="font-size: 26px; font-weight:800; color:#f472b6; margin: 4px 0;">¥${Math.round(debtAmount).toLocaleString()}</div>
+        <div class="settlement-sub">Give this to Radha to clear this month's account.</div>
+      `;
+    }
+  }
+
+  // --- RENDER DYNAMIC HISTORICAL LEDGER TABLE ---
+  function renderLedgerTable() {
+    ledgerBody.innerHTML = '';
+
+    if (currentLedger.length === 0) {
+      ledgerBody.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 40px;">
+            No expenses logged yet. Try loading a mock receipt above!
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    // Sort descending by date
+    const sorted = [...currentLedger].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    sorted.forEach((item, sortedIndex) => {
+      // Find index in main currentLedger array to delete accurately
+      const mainIndex = currentLedger.findIndex(x => x === item);
+      const tr = document.createElement('tr');
+
+      let splitText = 'Shared';
+      let badgeClass = 'ledger-badge-s';
+      let bShare = item.cost / 2;
+      let rShare = item.cost / 2;
+
+      if (item.assignedTo === 'Bishnu') {
+        splitText = 'Bishnu (100%)';
+        badgeClass = 'ledger-badge-b';
+        bShare = item.cost;
+        rShare = 0;
+      } else if (item.assignedTo === 'Radha') {
+        splitText = 'Radha (100%)';
+        badgeClass = 'ledger-badge-r';
+        bShare = 0;
+        rShare = item.cost;
+      }
+
+      tr.innerHTML = `
+        <td style="color: var(--text-muted); font-size:12px;">${item.date}</td>
+        <td style="font-weight: 500;">${escapeHTML(item.store)}</td>
+        <td style="text-align: center;">
+          <span class="avatar ${item.paidBy === 'Bishnu' ? 'avatar-b' : 'avatar-r'}">${item.paidBy[0]}</span>
+        </td>
+        <td style="text-align: right; font-weight:700;">¥${item.cost.toLocaleString()}</td>
+        <td style="text-align: center;">
+          <span class="ledger-badge ${badgeClass}">${splitText}</span>
+        </td>
+        <td style="text-align: right; color:#818cf8;">¥${Math.round(bShare).toLocaleString()}</td>
+        <td style="text-align: right; color:#f472b6;">¥${Math.round(rShare).toLocaleString()}</td>
+        <td style="text-align: center;">
+          <button class="btn-trash" data-index="${mainIndex}" title="Delete expense">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </td>
+      `;
+
+      tr.querySelector('.btn-trash').addEventListener('click', (e) => {
+        const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+        deleteLedgerItem(idx);
+      });
+
+      ledgerBody.appendChild(tr);
+    });
+  }
+
+  // --- DELETE TRANSACTION ACTION ---
+  function deleteLedgerItem(index) {
+    if (confirm('Delete this expense?')) {
+      currentLedger.splice(index, 1);
+      saveLedger();
+    }
+  }
+
+  // --- RESET ALL LEDGER DATA ---
+  btnClearLedger.addEventListener('click', () => {
+    if (confirm('Are you absolutely sure you want to reset this month\'s ledger? All records will be wiped.')) {
+      currentLedger = [];
+      saveLedger();
+    }
+  });
+
+  // --- EXPORT TO CSV ENGINE ---
+  btnExportCsv.addEventListener('click', () => {
+    if (currentLedger.length === 0) {
+      alert('Ledger is empty. Nothing to export.');
+      return;
+    }
+
+    let csv = "data:text/csv;charset=utf-8,";
+    csv += `"Date","Description","Paid By","Total Cost (Yen)","Split Assignment","Bishnu Share (Yen)","Radha Share (Yen)"\n`;
+
+    currentLedger.forEach(item => {
+      let bShare = item.cost / 2;
+      let rShare = item.cost / 2;
+
+      if (item.assignedTo === 'Bishnu') {
+        bShare = item.cost;
+        rShare = 0;
+      } else if (item.assignedTo === 'Radha') {
+        bShare = 0;
+        rShare = item.cost;
+      }
+
+      const escapedDesc = (item.store || '').replace(/"/g, '""');
+      csv += `"${item.date}","${escapedDesc}","${item.paidBy}",${item.cost},"${item.assignedTo}",${Math.round(bShare)},${Math.round(rShare)}\n`;
+    });
+
+    const encodedUri = encodeURI(csv);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `warikan_ledger_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    
+    link.click();
+    document.body.removeChild(link);
+  });
+
+  // Helper to escape HTML and prevent inject attacks
+  function escapeHTML(str) {
+    if (!str) return '';
+    return str.replace(/[&<>'"]/g, 
+      tag => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;'
+      }[tag] || tag)
+    );
+  }
+});
