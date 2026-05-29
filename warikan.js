@@ -1,8 +1,6 @@
 // warikan.js
 // Handles Gemini AI OCR, Japanese translation maps, split selectors, manual entry forms, and settlement math
 
-const GEMINI_API_KEY = 'AIzaSyAGpRlz8kPsH8RXe6EHg13EkJRyxRnL24U';
-
 let currentLedger = [];
 let currentScannedItems = [];
 
@@ -81,7 +79,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const sheetsSyncUrlInput = document.getElementById('sheets-sync-url');
   const btnSaveSync = document.getElementById('btn-save-sync');
 
+  // Gemini AI Elements
+  const geminiApiKeyInput = document.getElementById('gemini-api-key');
+  const btnSaveGemini = document.getElementById('btn-save-gemini');
+
   // --- INITIAL RUN ---
+  // Load saved Gemini Key from localStorage
+  const savedGeminiKey = localStorage.getItem('warikanGeminiKey') || '';
+  if (geminiApiKeyInput && savedGeminiKey) {
+    geminiApiKeyInput.value = savedGeminiKey;
+  }
+
+  if (btnSaveGemini) {
+    btnSaveGemini.addEventListener('click', () => {
+      const key = geminiApiKeyInput.value.trim();
+      if (key === '') {
+        localStorage.removeItem('warikanGeminiKey');
+        alert('API key cleared.');
+        return;
+      }
+      localStorage.setItem('warikanGeminiKey', key);
+      alert('✅ Gemini AI connected! You only need to do this once per browser.');
+    });
+  }
 
   // Load saved Sync URL
   const savedSyncUrl = localStorage.getItem('warikanSyncUrl') || '';
@@ -112,8 +132,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- DRAG & DROP FILE LISTENERS ---
   function handleFileInput(file) {
-    // Always use Gemini AI — key is built into the app
-    parseReceiptWithGemini(file, GEMINI_API_KEY);
+    const key = localStorage.getItem('warikanGeminiKey');
+    if (!key) {
+      alert('⚠️ Please enter your Gemini API key in the sidebar first, then click "Save Key". You only need to do this once!');
+      return;
+    }
+    parseReceiptWithGemini(file, key);
   }
 
   dropZone.addEventListener('click', () => fileInput.click());
