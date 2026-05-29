@@ -158,10 +158,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Free-tier Gemini models to try in order — automatically falls back if one fails
+  const GEMINI_MODELS = [
+    'gemini-1.5-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash-8b'
+  ];
+
   // --- GEMINI MULTIMODAL AI OCR & TRANSLATION ENGINE ---
-  async function parseReceiptWithGemini(file, apiKey) {
+  async function parseReceiptWithGemini(file, apiKey, modelIndex = 0) {
     ocrLoader.style.display = 'flex';
-    ocrProgress.innerText = "Gemini AI is reading receipt image...";
+    ocrProgress.innerText = `Gemini AI (${GEMINI_MODELS[modelIndex]}) is reading receipt...`;
 
     try {
       const base64Data = await fileToBase64(file);
@@ -176,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else mimeType = 'image/jpeg'; // Default safe fallback for all camera photos
       }
       
-      const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS[modelIndex]}:generateContent?key=${apiKey}`;
 
       const prompt = `You are analyzing a Japanese supermarket or convenience store receipt photo. Your job is to extract all purchase information.
 
@@ -308,11 +315,20 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
 
     } catch (error) {
       ocrLoader.style.display = 'none';
-      console.error("Gemini OCR Error:", error);
+      console.error(`Gemini OCR Error (model: ${GEMINI_MODELS[modelIndex]}):`, error);
       
-      // Show a helpful error message with the real reason
+      // Auto-retry with next model in the list before giving up
+      const nextIndex = modelIndex + 1;
+      if (nextIndex < GEMINI_MODELS.length) {
+        console.log(`Retrying with next model: ${GEMINI_MODELS[nextIndex]}`);
+        ocrProgress.innerText = `Trying alternative model: ${GEMINI_MODELS[nextIndex]}...`;
+        parseReceiptWithGemini(file, apiKey, nextIndex);
+        return;
+      }
+      
+      // All models failed — show helpful error
       const errorMsg = error.message || "Unknown error";
-      alert(`⚠️ Gemini AI could not scan this receipt.\n\nReason: ${errorMsg}\n\nTips:\n• Make sure the photo is clear and well-lit\n• Make sure your Gemini API key is correct\n• Try re-taking the photo closer to the receipt\n\nLoading AEON template as a demo example.`);
+      alert(`⚠️ Gemini AI could not scan this receipt.\n\nReason: ${errorMsg}\n\nTips:\n• Make sure the photo is clear and well-lit\n• Check your internet connection\n• Try re-taking the photo closer to the receipt\n\nLoading AEON template as a demo example.`);
       loadMockTemplate(0);
     }
   }
