@@ -79,7 +79,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const sheetsSyncUrlInput = document.getElementById('sheets-sync-url');
   const btnSaveSync = document.getElementById('btn-save-sync');
 
+  // Gemini AI Elements
+  const geminiApiKeyInput = document.getElementById('gemini-api-key');
+  const btnSaveGemini = document.getElementById('btn-save-gemini');
+
   // --- INITIAL RUN ---
+  // Load saved Gemini Key
+  const savedGeminiKey = localStorage.getItem('warikanGeminiKey') || '';
+  if (geminiApiKeyInput) {
+    geminiApiKeyInput.value = savedGeminiKey;
+  }
+
+  if (btnSaveGemini) {
+    btnSaveGemini.addEventListener('click', () => {
+      const key = geminiApiKeyInput.value.trim();
+      if (key === '') {
+        localStorage.removeItem('warikanGeminiKey');
+        alert('Gemini AI Scanner key cleared. Falling back to local OCR.');
+        return;
+      }
+      localStorage.setItem('warikanGeminiKey', key);
+      alert('Gemini AI Scanner connected successfully!');
+    });
+  }
+
   // Load saved Sync URL
   const savedSyncUrl = localStorage.getItem('warikanSyncUrl') || '';
   if (sheetsSyncUrlInput) {
@@ -108,11 +131,20 @@ document.addEventListener('DOMContentLoaded', () => {
   loadLedger();
 
   // --- DRAG & DROP FILE LISTENERS ---
+  function handleFileInput(file) {
+    const key = localStorage.getItem('warikanGeminiKey');
+    if (key) {
+      parseReceiptWithGemini(file, key);
+    } else {
+      processReceiptImage(file);
+    }
+  }
+
   dropZone.addEventListener('click', () => fileInput.click());
   
   fileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
-      processReceiptImage(e.target.files[0]);
+      handleFileInput(e.target.files[0]);
     }
   });
 
@@ -129,13 +161,121 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     dropZone.style.borderColor = 'rgba(255, 255, 255, 0.1)';
     if (e.dataTransfer.files.length > 0) {
-      processReceiptImage(e.dataTransfer.files[0]);
+      handleFileInput(e.dataTransfer.files[0]);
     }
   });
 
   // --- MOCK LOADER LISTENERS (FOR FAST TESTING) ---
   btnLoadMockAeon.addEventListener('click', () => loadMockTemplate(0));
   btnLoadMock711.addEventListener('click', () => loadMockTemplate(1));
+
+  // Helper to convert file to Base64
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64String = reader.result.split(',')[1];
+        resolve(base64String);
+      };
+      reader.onerror = error => reject(error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // --- GEMINI MULTIMODAL AI OCR & TRANSLATION ENGINE ---
+  async function parseReceiptWithGemini(file, apiKey) {
+    ocrLoader.style.display = 'flex';
+    ocrProgress.innerText = "Gemini AI is reading receipt image...";
+
+    try {
+      const base64Data = await fileToBase64(file);
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+      const prompt = `Analyze this Japanese supermarket/convenience store receipt. Extract:
+1. The store name (in English/Romaji).
+2. The date of the receipt (in YYYY-MM-DD format). If not found, use today's date: ${new Date().toISOString().slice(0, 10)}.
+3. An itemized list of all purchased products.
+For each product:
+- Translate the Japanese name to a clear, clean English name.
+- Extract the Yen price as an integer.
+- Based on the item type, make a smart split suggestion: 'shared' (for groceries, vegetables, toilet paper, laundry soap, household items), 'Bishnu' (for beer, specific snacks/drinks Bishnu likes), or 'Radha' (for cosmetics, skin lotion, specific foods Radha likes). Be intelligent: default to 'shared' for normal food ingredients.
+
+Return ONLY a valid JSON object matching the following structure exactly, with no extra markdown code blocks, backticks, or text:
+{
+  "store": "AEON Supermarket",
+  "date": "2026-05-28",
+  "items": [
+    {"japanese": "牛乳", "english": "Milk 1L", "price": 210, "assignedTo": "shared"},
+    {"japanese": "化粧水", "english": "Skin Lotion", "price": 1200, "assignedTo": "Radha"}
+  ]
+}`;
+
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: file.type || "image/jpeg",
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ]
+      };
+
+      ocrProgress.innerText = "Gemini AI is translating & categorizing items...";
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseData = await response.json();
+      
+      if (!response.ok || !responseData.candidates || responseData.candidates.length === 0) {
+        throw new Error(responseData.error?.message || "Invalid API key or network block.");
+      }
+
+      let aiText = responseData.candidates[0].content.parts[0].text.trim();
+      
+      // Clean up markdown blocks if the AI wrapped JSON in ```json ... ```
+      if (aiText.includes("```")) {
+        aiText = aiText.replace(/```json/g, '').replace(/```/g, '').trim();
+      }
+
+      console.log("Raw Gemini AI response:", aiText);
+
+      // Parse JSON from Gemini
+      const parsedData = JSON.parse(aiText);
+      
+      if (!parsedData.items || !Array.isArray(parsedData.items)) {
+        throw new Error("Invalid items structure from Gemini.");
+      }
+
+      ocrLoader.style.display = 'none';
+
+      // Set editor UI state
+      receiptStoreName.innerText = parsedData.store || "Scanned Store Bill";
+      receiptDateInput.value = parsedData.date || new Date().toISOString().slice(0, 10);
+      receiptPayer.value = "Bishnu";
+      currentScannedItems = parsedData.items;
+
+      renderReceiptEditor();
+
+    } catch (error) {
+      ocrLoader.style.display = 'none';
+      console.error("Gemini OCR Error:", error);
+      alert(`Gemini AI Scrape failed: ${error.message}. Falling back to local OCR scanner.`);
+      // Fall back to local Tesseract OCR!
+      processReceiptImage(file);
+    }
+  }
 
   // --- TESSERACT CLIENT-SIDE OCR ENGINE ---
   async function processReceiptImage(file) {
