@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="warikan.css?v=13">
+  <link rel="stylesheet" href="warikan.css?v=14">
   <!-- Tesseract.js local client-side OCR library -->
   <script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
 </head>
@@ -15,11 +15,20 @@
   <div class="app-container">
     <!-- LEFT SIDEBAR: Real-time calculation & settlement summary -->
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-logo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <div class="brand" style="display: flex; align-items: center; justify-content: space-between; width: 100%; position: relative;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="brand-logo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <span class="brand-name">Warikan Hub</span>
         </div>
-        <span class="brand-name">Warikan Hub</span>
+        
+        <!-- Mobile Profile Button Container -->
+        <div id="mobile-profile-container" class="profile-menu-container mobile-only-profile" style="position: relative;">
+          <button id="profile-menu-btn-mobile" class="profile-trigger" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 10px rgba(168, 85, 247, 0.1);">
+            <span class="avatar avatar-b" style="margin: 0; font-size: 11px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: linear-gradient(135deg, #a855f7, #6366f1); color: white; font-weight: 700;">BG</span>
+          </button>
+        </div>
       </div>
 
       <div class="sidebar-scroll">
@@ -101,8 +110,8 @@
           <p style="font-size: 12px; color: var(--text-dim); margin: 4px 0 0 0;">Manage splits, OCR scanning, and monthly settlements</p>
         </div>
         
-        <!-- PROFILE DROPDOWN CONTAINER -->
-        <div class="profile-menu-container" style="position: relative;">
+        <!-- PROFILE DROPDOWN CONTAINER (Desktop) -->
+        <div id="desktop-profile-container" class="profile-menu-container desktop-only-profile" style="position: relative;">
           <button id="profile-menu-btn" class="profile-trigger" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 50%; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; transition: all 0.2s; box-shadow: 0 4px 12px rgba(168, 85, 247, 0.1);">
             <span class="avatar avatar-b" style="margin: 0; font-size: 14px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: linear-gradient(135deg, #a855f7, #6366f1); color: white; font-weight: 700;">BG</span>
           </button>
@@ -316,6 +325,6 @@
     </div>
   </div>
 
-  <script src="warikan.js?v=13"></script>
+  <script src="warikan.js?v=14"></script>
 </body>
 </html>

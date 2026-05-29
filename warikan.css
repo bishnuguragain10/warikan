@@ -965,14 +965,31 @@ body {
   }
 }
 
+/* Profile Dropdown Visibility Control */
+.mobile-only-profile {
+  display: none !important;
+}
+.desktop-only-profile {
+  display: block;
+}
+
 /* Ensure responsiveness for the top navigation */
 @media (max-width: 768px) {
   .top-nav {
-    padding: 0 8px;
+    display: none !important;
+  }
+  
+  .mobile-only-profile {
+    display: block !important;
+  }
+  .desktop-only-profile {
+    display: none !important;
   }
   
   .profile-dropdown-card {
-    right: -8px !important;
+    right: 0 !important;
     width: 290px !important;
+    position: absolute !important;
+    top: 44px !important;
   }
 }

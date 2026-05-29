@@ -745,30 +745,53 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
   if (taxBtn8) taxBtn8.addEventListener('click', () => setTaxMultiplier(1.08, taxBtn8));
   if (taxBtn10) taxBtn10.addEventListener('click', () => setTaxMultiplier(1.10, taxBtn10));
 
-  // --- PROFILE MENU DROPDOWN HANDLER ---
+  // --- PROFILE MENU DROPDOWN HANDLER (Dynamic Reparenting) ---
   const profileMenuBtn = document.getElementById('profile-menu-btn');
+  const profileMenuBtnMobile = document.getElementById('profile-menu-btn-mobile');
   const profileDropdown = document.getElementById('profile-dropdown');
+  const desktopContainer = document.getElementById('desktop-profile-container');
+  const mobileContainer = document.getElementById('mobile-profile-container');
 
-  if (profileMenuBtn && profileDropdown) {
-    profileMenuBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isVisible = profileDropdown.style.display === 'block';
-      profileDropdown.style.display = isVisible ? 'none' : 'block';
+  function toggleDropdown(button, targetContainer) {
+    if (!profileDropdown || !targetContainer) return;
+    
+    const isVisible = profileDropdown.style.display === 'block' && profileDropdown.parentElement === targetContainer;
+    
+    if (isVisible) {
+      profileDropdown.style.display = 'none';
+    } else {
+      // Append to the active container dynamically so it anchors correctly
+      targetContainer.appendChild(profileDropdown);
+      profileDropdown.style.display = 'block';
       
       // Fun active pulse micro-animation
-      if (!isVisible) {
-        profileMenuBtn.style.transform = 'scale(0.95)';
-        setTimeout(() => profileMenuBtn.style.transform = 'scale(1)', 100);
-      }
-    });
+      button.style.transform = 'scale(0.95)';
+      setTimeout(() => button.style.transform = 'scale(1)', 100);
+    }
+  }
 
-    // Close when clicking anywhere outside
-    document.addEventListener('click', (e) => {
-      if (!profileDropdown.contains(e.target) && e.target !== profileMenuBtn && !profileMenuBtn.contains(e.target)) {
-        profileDropdown.style.display = 'none';
-      }
+  if (profileMenuBtn && desktopContainer) {
+    profileMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDropdown(profileMenuBtn, desktopContainer);
     });
   }
+
+  if (profileMenuBtnMobile && mobileContainer) {
+    profileMenuBtnMobile.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDropdown(profileMenuBtnMobile, mobileContainer);
+    });
+  }
+
+  // Close dropdown when clicking anywhere outside
+  document.addEventListener('click', (e) => {
+    if (profileDropdown && !profileDropdown.contains(e.target)) {
+      if (profileMenuBtn && (e.target === profileMenuBtn || profileMenuBtn.contains(e.target))) return;
+      if (profileMenuBtnMobile && (e.target === profileMenuBtnMobile || profileMenuBtnMobile.contains(e.target))) return;
+      profileDropdown.style.display = 'none';
+    }
+  });
 
   // --- MANUAL EXPENSE ENTRY ACTION ---
   btnManualForm.addEventListener('click', () => {
