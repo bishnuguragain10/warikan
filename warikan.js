@@ -77,9 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnExportCsv = document.getElementById('btn-export-csv');
   const btnClearLedger = document.getElementById('btn-clear-ledger');
   
-  // Tester Buttons
-  const btnLoadMockAeon = document.getElementById('btn-load-mock-aeon');
-  const btnLoadMock711 = document.getElementById('btn-load-mock-711');
+
 
   // Cloud Sync Elements
   const sheetsSyncUrlInput = document.getElementById('sheets-sync-url');
@@ -171,9 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- MOCK LOADER LISTENERS (FOR FAST TESTING) ---
-  btnLoadMockAeon.addEventListener('click', () => loadMockTemplate(0));
-  btnLoadMock711.addEventListener('click', () => loadMockTemplate(1));
+
 
   // Helper to convert file to Base64
   function fileToBase64(file) {

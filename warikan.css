@@ -354,7 +354,7 @@ body {
 /* Scanners and Drag & Drop Grid */
 .scanner-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 1fr;
   gap: 20px;
 }
 
