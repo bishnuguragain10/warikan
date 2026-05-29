@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="warikan.css?v=12">
+  <link rel="stylesheet" href="warikan.css?v=13">
   <!-- Tesseract.js local client-side OCR library -->
   <script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
 </head>
@@ -71,26 +71,7 @@
           </div>
         </div>
 
-        <!-- Google Gemini AI Settings -->
-        <div class="card ai-settings-card" style="border-color: rgba(168, 85, 247, 0.4);">
-          <h3 class="card-title" style="color: #c084fc;">🧠 Gemini AI Scanner</h3>
-          <div class="form-group" style="margin-bottom:8px;">
-            <input type="password" id="gemini-api-key" placeholder="Paste Gemini API Key here" style="width:100%; font-size:11px; padding:8px; background:rgba(10,12,18,0.5); border:1px solid rgba(168,85,247,0.4); border-radius:6px; color:var(--text); outline:none;">
-          </div>
-          <button id="btn-save-gemini" class="btn btn-secondary" style="width:100%; padding: 8px 12px; font-size:12px; background: linear-gradient(135deg, #a855f7, #6366f1); border:none; box-shadow: 0 4px 10px rgba(168, 85, 247, 0.35); color: white; border-radius:6px; cursor:pointer;">💾 Save Key (Once Only)</button>
-          <p style="font-size: 9.5px; color: var(--text-dim); margin-top:8px; line-height: 1.5;">
-            Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#a855f7; text-decoration:none; font-weight:600;">aistudio.google.com/apikey</a>. Saved in your browser — enter once, works forever.
-          </p>
-        </div>
 
-        <!-- Google Sheets Cloud Sync Settings -->
-        <div class="card sync-settings-card">
-          <h3 class="card-title">Cloud Sync (Google Sheets)</h3>
-          <div class="form-group" style="margin-bottom:8px;">
-            <input type="text" id="sheets-sync-url" placeholder="Paste Web App URL here" style="width:100%; font-size:11px; padding:8px; background:rgba(10,12,18,0.5); border:1px solid var(--border); border-radius:6px; color:var(--text); outline:none;">
-          </div>
-          <button id="btn-save-sync" class="btn btn-secondary" style="padding: 6px 12px; font-size:11.5px; background: var(--primary); border:none; box-shadow: 0 4px 10px var(--primary-glow);">Save & Sync Cloud</button>
-        </div>
 
         <!-- Ledger Actions -->
         <div class="card action-card">
@@ -113,6 +94,57 @@
 
     <!-- RIGHT PANEL: Receipt Uploader & Monthly List -->
     <main class="main-content">
+      <!-- TOP NAVIGATION BAR -->
+      <header class="top-nav" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; position: relative;">
+        <div>
+          <h1 style="font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--text); margin: 0;">Dashboard</h1>
+          <p style="font-size: 12px; color: var(--text-dim); margin: 4px 0 0 0;">Manage splits, OCR scanning, and monthly settlements</p>
+        </div>
+        
+        <!-- PROFILE DROPDOWN CONTAINER -->
+        <div class="profile-menu-container" style="position: relative;">
+          <button id="profile-menu-btn" class="profile-trigger" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 50%; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; transition: all 0.2s; box-shadow: 0 4px 12px rgba(168, 85, 247, 0.1);">
+            <span class="avatar avatar-b" style="margin: 0; font-size: 14px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: linear-gradient(135deg, #a855f7, #6366f1); color: white; font-weight: 700;">BG</span>
+          </button>
+
+          <!-- DROPDOWN BOX -->
+          <div id="profile-dropdown" class="profile-dropdown-card" style="display: none; position: absolute; top: 52px; right: 0; width: 320px; background: rgba(10, 12, 18, 0.96); border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.65); backdrop-filter: blur(16px); z-index: 100; padding: 16px; transform-origin: top right; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);">
+            <!-- Profile Info Header -->
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+              <span style="font-size: 28px;">👑</span>
+              <div>
+                <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: var(--text);">Bishnu's Workspace</h4>
+                <p style="margin: 2px 0 0 0; font-size: 11px; color: var(--text-dim);">Owner • Free Tier Account</p>
+              </div>
+            </div>
+
+            <!-- Gemini AI Card section inside menu -->
+            <div style="background: rgba(168, 85, 247, 0.04); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 10px; padding: 12px; margin-bottom: 12px; text-align: left;">
+              <h4 style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #c084fc; display: flex; align-items: center; gap: 6px;">
+                <span>🧠</span> Gemini AI Scanner Key
+              </h4>
+              <div style="margin-bottom: 8px;">
+                <input type="password" id="gemini-api-key" placeholder="Paste Gemini API Key here" style="width: 100%; font-size: 11px; padding: 8px; background: rgba(10, 12, 18, 0.6); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 6px; color: var(--text); outline: none; font-family: monospace;">
+              </div>
+              <button id="btn-save-gemini" class="btn btn-secondary" style="width: 100%; padding: 6px 10px; font-size: 11px; background: linear-gradient(135deg, #a855f7, #6366f1); border: none; box-shadow: 0 4px 10px rgba(168, 85, 247, 0.25); color: white; border-radius: 6px; cursor: pointer; font-weight: 600;">💾 Save Key</button>
+              <p style="font-size: 9px; color: var(--text-dim); margin: 6px 0 0 0; line-height: 1.4;">
+                Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#c084fc; text-decoration:none; font-weight:600;">aistudio.google.com</a>.
+              </p>
+            </div>
+
+            <!-- Sheets Sync section inside menu -->
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: left;">
+              <h4 style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                <span>📊</span> Google Sheets Cloud Sync
+              </h4>
+              <div style="margin-bottom: 8px;">
+                <input type="text" id="sheets-sync-url" placeholder="Paste Web App URL here" style="width: 100%; font-size: 11px; padding: 8px; background: rgba(10, 12, 18, 0.6); border: 1px solid var(--border); border-radius: 6px; color: var(--text); outline: none;">
+              </div>
+              <button id="btn-save-sync" class="btn btn-secondary" style="width: 100%; padding: 6px 10px; font-size: 11px; background: var(--primary); border: none; box-shadow: 0 4px 10px var(--primary-glow); border-radius: 6px; cursor: pointer; color: white; font-weight: 600;">Save & Sync Cloud</button>
+            </div>
+          </div>
+        </div>
+      </header>
       <!-- Section 1: Japanese OCR Upload Center -->
       <section class="section">
         <h2 class="section-heading">Step 1: Japanese Receipt Scan</h2>
@@ -284,6 +316,6 @@
     </div>
   </div>
 
-  <script src="warikan.js?v=12"></script>
+  <script src="warikan.js?v=13"></script>
 </body>
 </html>

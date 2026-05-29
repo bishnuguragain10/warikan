@@ -745,6 +745,31 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
   if (taxBtn8) taxBtn8.addEventListener('click', () => setTaxMultiplier(1.08, taxBtn8));
   if (taxBtn10) taxBtn10.addEventListener('click', () => setTaxMultiplier(1.10, taxBtn10));
 
+  // --- PROFILE MENU DROPDOWN HANDLER ---
+  const profileMenuBtn = document.getElementById('profile-menu-btn');
+  const profileDropdown = document.getElementById('profile-dropdown');
+
+  if (profileMenuBtn && profileDropdown) {
+    profileMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = profileDropdown.style.display === 'block';
+      profileDropdown.style.display = isVisible ? 'none' : 'block';
+      
+      // Fun active pulse micro-animation
+      if (!isVisible) {
+        profileMenuBtn.style.transform = 'scale(0.95)';
+        setTimeout(() => profileMenuBtn.style.transform = 'scale(1)', 100);
+      }
+    });
+
+    // Close when clicking anywhere outside
+    document.addEventListener('click', (e) => {
+      if (!profileDropdown.contains(e.target) && e.target !== profileMenuBtn && !profileMenuBtn.contains(e.target)) {
+        profileDropdown.style.display = 'none';
+      }
+    });
+  }
+
   // --- MANUAL EXPENSE ENTRY ACTION ---
   btnManualForm.addEventListener('click', () => {
     // Default today's date in form input
