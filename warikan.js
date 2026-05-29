@@ -267,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const prompt = `You are analyzing a Japanese supermarket or convenience store receipt photo. Your job is to extract all purchase information.
 
-CRITICAL INSTRUCTION: You MUST read the receipt image line-by-line from the top of the slip to the bottom. Extract every product in the exact sequence it appears vertically on the physical receipt paper. DO NOT group items by category, price, or assignee. The items array in your JSON output MUST match the top-to-bottom vertical order of the printed receipt, line by line.
+CRITICAL INSTRUCTION: You MUST read the receipt image line-by-line from the top of the slip to the bottom. Extract every product in the exact sequence it appears vertically on the physical receipt paper. DO NOT stop extracting items until you have reached the final subtotal (小計) or grand total (合計) lines. Check the bottom of the list carefully so that no items (like salt, condiments, or fruits) are left out. DO NOT group items by category, price, or assignee. The items array in your JSON output MUST match the top-to-bottom vertical order of the printed receipt, line by line.
 
 IMPORTANT: Look at the image carefully. Find every product line that has a price next to it.
 
@@ -283,7 +283,7 @@ For each item:
 - assignedTo: one of these three values only: "shared" (household items, food ingredients, cleaning supplies, toiletries), "Bishnu" (beer, alcohol, energy drinks, snacks for one person), or "Radha" (cosmetics, skincare, feminine hygiene)
 
 Rules:
-- Include EVERY item you can see with a price
+- Include EVERY single item you can see with a price, making sure not to skip the last items at the bottom.
 - Extract and list the items in the EXACT SAME ORDER as they appear from top to bottom on the receipt. Do not re-order, sort, or skip any items.
 - If an item repeats, include it multiple times
 - Ignore totals, taxes, subtotals, and discounts (lines like 合計, 小計, 消費税, 割引)
