@@ -55,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Tax Mode elements
   const taxBtnNone = document.getElementById('tax-btn-none');
   const taxBtn8 = document.getElementById('tax-btn-8');
-  const taxBtn10 = document.getElementById('tax-btn-10');
 
   // Ledger Table
   const ledgerBody = document.getElementById('ledger-body');
@@ -268,6 +267,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const prompt = `You are analyzing a Japanese supermarket or convenience store receipt photo. Your job is to extract all purchase information.
 
+CRITICAL INSTRUCTION: You MUST read the receipt image line-by-line from the top of the slip to the bottom. Extract every product in the exact sequence it appears vertically on the physical receipt paper. DO NOT group items by category, price, or assignee. The items array in your JSON output MUST match the top-to-bottom vertical order of the printed receipt, line by line.
+
 IMPORTANT: Look at the image carefully. Find every product line that has a price next to it.
 
 Extract the following:
@@ -405,7 +406,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
 
       // Reset tax multiplier to default (no tax added / 1.0)
       currentTaxMultiplier = 1.0;
-      [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
+      [taxBtnNone, taxBtn8].forEach(btn => {
         if (btn) btn.classList.remove('active');
       });
       if (taxBtnNone) taxBtnNone.classList.add('active');
@@ -570,7 +571,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
         
         // Reset tax multiplier to default (no tax added / 1.0)
         currentTaxMultiplier = 1.0;
-        [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
+        [taxBtnNone, taxBtn8].forEach(btn => {
           if (btn) btn.classList.remove('active');
         });
         if (taxBtnNone) taxBtnNone.classList.add('active');
@@ -742,7 +743,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
   // --- TAX MODE SELECTION HANDLERS ---
   function setTaxMultiplier(multiplier, activeBtn) {
     currentTaxMultiplier = multiplier;
-    [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
+    [taxBtnNone, taxBtn8].forEach(btn => {
       if (btn) btn.classList.remove('active');
     });
     if (activeBtn) activeBtn.classList.add('active');
@@ -751,7 +752,6 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
 
   if (taxBtnNone) taxBtnNone.addEventListener('click', () => setTaxMultiplier(1.0, taxBtnNone));
   if (taxBtn8) taxBtn8.addEventListener('click', () => setTaxMultiplier(1.08, taxBtn8));
-  if (taxBtn10) taxBtn10.addEventListener('click', () => setTaxMultiplier(1.10, taxBtn10));
 
   // --- PROFILE MENU DROPDOWN HANDLER (Dynamic Reparenting) ---
   const profileMenuBtn = document.getElementById('profile-menu-btn');
