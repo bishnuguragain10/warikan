@@ -3,6 +3,7 @@
 
 let currentLedger = [];
 let currentScannedItems = [];
+let currentTaxMultiplier = 1.0;
 
 // Local Japanese Translation & Assignment Heuristics Map
 const JPN_DICTIONARY = {
@@ -50,6 +51,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const receiptItemsBody = document.getElementById('receipt-items-body');
   const btnCommitReceipt = document.getElementById('btn-commit-receipt');
   const btnCancelReceipt = document.getElementById('btn-cancel-receipt');
+
+  // Tax Mode elements
+  const taxBtnNone = document.getElementById('tax-btn-none');
+  const taxBtn8 = document.getElementById('tax-btn-8');
+  const taxBtn10 = document.getElementById('tax-btn-10');
 
   // Ledger Table
   const ledgerBody = document.getElementById('ledger-body');
@@ -400,6 +406,13 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
       receiptPayer.value = "Bishnu";
       currentScannedItems = parsedData.items;
 
+      // Reset tax multiplier to default (no tax added / 1.0)
+      currentTaxMultiplier = 1.0;
+      [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
+        if (btn) btn.classList.remove('active');
+      });
+      if (taxBtnNone) taxBtnNone.classList.add('active');
+
       renderReceiptEditor();
 
     } catch (error) {
@@ -558,6 +571,13 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
         receiptPayer.value = template.paidBy;
         currentScannedItems = template.items;
         
+        // Reset tax multiplier to default (no tax added / 1.0)
+        currentTaxMultiplier = 1.0;
+        [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
+          if (btn) btn.classList.remove('active');
+        });
+        if (taxBtnNone) taxBtnNone.classList.add('active');
+
         renderReceiptEditor();
       })
       .catch(err => {
@@ -590,7 +610,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
         <td>
           <input type="text" class="edit-english" data-index="${index}" value="${escapeHTML(item.english)}" style="background:transparent; border:none; color:var(--text-muted); width:100%; font-size:13px; outline:none; border-bottom:1px dashed var(--border);">
         </td>
-        <td style="text-align: right; font-weight:700;">¥${item.price.toLocaleString()}</td>
+        <td style="text-align: right; font-weight:700;">¥${Math.round(item.price * currentTaxMultiplier).toLocaleString()}</td>
         <td style="text-align: center;">
           <div class="segment-control">
             <button class="segment-btn ${item.assignedTo === 'Bishnu' ? 'active' : ''}" data-index="${index}" data-split="Bishnu">Bishnu</button>
@@ -655,7 +675,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
           date: selectedDate,
           store: `${store} - ${item.english} (${item.japanese})`,
           paidBy: payer,
-          cost: item.price,
+          cost: Math.round(item.price * currentTaxMultiplier),
           assignedTo: item.assignedTo
         };
         return fetch(syncUrl, {
@@ -679,7 +699,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
             date: selectedDate,
             store: `${store} - ${item.english} (${item.japanese})`,
             paidBy: payer,
-            cost: item.price,
+            cost: Math.round(item.price * currentTaxMultiplier),
             assignedTo: item.assignedTo
           });
         });
@@ -692,7 +712,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
           date: selectedDate,
           store: `${store} - ${item.english} (${item.japanese})`,
           paidBy: payer,
-          cost: item.price,
+          cost: Math.round(item.price * currentTaxMultiplier),
           assignedTo: item.assignedTo
         });
       });
@@ -710,6 +730,20 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
       currentScannedItems = [];
     }
   });
+
+  // --- TAX MODE SELECTION HANDLERS ---
+  function setTaxMultiplier(multiplier, activeBtn) {
+    currentTaxMultiplier = multiplier;
+    [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
+      if (btn) btn.classList.remove('active');
+    });
+    if (activeBtn) activeBtn.classList.add('active');
+    renderReceiptEditor();
+  }
+
+  if (taxBtnNone) taxBtnNone.addEventListener('click', () => setTaxMultiplier(1.0, taxBtnNone));
+  if (taxBtn8) taxBtn8.addEventListener('click', () => setTaxMultiplier(1.08, taxBtn8));
+  if (taxBtn10) taxBtn10.addEventListener('click', () => setTaxMultiplier(1.10, taxBtn10));
 
   // --- MANUAL EXPENSE ENTRY ACTION ---
   btnManualForm.addEventListener('click', () => {
