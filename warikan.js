@@ -182,17 +182,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Free-tier Gemini models to try in order — automatically falls back if one fails
-  const GEMINI_MODELS = [
+  // Preferred models in order — auto-discovery will pick first available one
+  const PREFERRED_MODELS = [
     'gemini-1.5-flash',
     'gemini-2.0-flash-lite',
-    'gemini-1.5-flash-8b'
+    'gemini-1.5-flash-8b',
+    'gemini-1.5-pro',
+    'gemini-pro-vision'
   ];
 
+  // Discover which model is actually available for this API key
+  async function discoverGeminiModel(apiKey) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Failed to list models');
+      
+      const availableModels = (data.models || [])
+        .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+        .map(m => m.name.replace('models/', ''));
+      
+      console.log('Available models for this API key:', availableModels);
+      
+      // Pick the first preferred model that is available
+      for (const preferred of PREFERRED_MODELS) {
+        if (availableModels.includes(preferred)) return preferred;
+      }
+      // If none of our preferred models match, use the first available one
+      if (availableModels.length > 0) return availableModels[0];
+      throw new Error('No generateContent-capable models found for this API key.');
+    } catch (e) {
+      console.warn('Model discovery failed, defaulting to gemini-1.5-flash:', e);
+      return 'gemini-1.5-flash'; // safe fallback
+    }
+  }
+
   // --- GEMINI MULTIMODAL AI OCR & TRANSLATION ENGINE ---
-  async function parseReceiptWithGemini(file, apiKey, modelIndex = 0) {
+  async function parseReceiptWithGemini(file, apiKey) {
     ocrLoader.style.display = 'flex';
-    ocrProgress.innerText = `Gemini AI (${GEMINI_MODELS[modelIndex]}) is reading receipt...`;
+    ocrProgress.innerText = 'Gemini AI: detecting available model...';
 
     try {
       const base64Data = await fileToBase64(file);
@@ -207,7 +235,12 @@ document.addEventListener('DOMContentLoaded', () => {
         else mimeType = 'image/jpeg'; // Default safe fallback for all camera photos
       }
       
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS[modelIndex]}:generateContent?key=${apiKey}`;
+      // Auto-discover the best model available for this API key
+      const chosenModel = await discoverGeminiModel(apiKey);
+      ocrProgress.innerText = `Gemini AI (${chosenModel}) is reading receipt...`;
+      console.log('Using model:', chosenModel);
+      
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${chosenModel}:generateContent?key=${apiKey}`;
 
       const prompt = `You are analyzing a Japanese supermarket or convenience store receipt photo. Your job is to extract all purchase information.
 
@@ -339,20 +372,9 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
 
     } catch (error) {
       ocrLoader.style.display = 'none';
-      console.error(`Gemini OCR Error (model: ${GEMINI_MODELS[modelIndex]}):`, error);
-      
-      // Auto-retry with next model in the list before giving up
-      const nextIndex = modelIndex + 1;
-      if (nextIndex < GEMINI_MODELS.length) {
-        console.log(`Retrying with next model: ${GEMINI_MODELS[nextIndex]}`);
-        ocrProgress.innerText = `Trying alternative model: ${GEMINI_MODELS[nextIndex]}...`;
-        parseReceiptWithGemini(file, apiKey, nextIndex);
-        return;
-      }
-      
-      // All models failed — show helpful error
-      const errorMsg = error.message || "Unknown error";
-      alert(`⚠️ Gemini AI could not scan this receipt.\n\nReason: ${errorMsg}\n\nTips:\n• Make sure the photo is clear and well-lit\n• Check your internet connection\n• Try re-taking the photo closer to the receipt\n\nLoading AEON template as a demo example.`);
+      console.error('Gemini OCR Error:', error);
+      const errorMsg = error.message || 'Unknown error';
+      alert(`⚠️ Gemini AI could not scan this receipt.\n\nReason: ${errorMsg}\n\nTips:\n• Make sure the photo is clear and well-lit\n• Check your internet connection\n• Make sure your API key is from aistudio.google.com\n\nLoading AEON template as a demo example.`);
       loadMockTemplate(0);
     }
   }
