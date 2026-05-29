@@ -287,6 +287,7 @@ For each item:
 
 Rules:
 - Include EVERY item you can see with a price
+- Extract and list the items in the EXACT SAME ORDER as they appear from top to bottom on the receipt. Do not re-order, sort, or skip any items.
 - If an item repeats, include it multiple times
 - Ignore totals, taxes, subtotals, and discounts (lines like 合計, 小計, 消費税, 割引)
 - Default to "shared" if unsure about assignedTo
@@ -610,7 +611,10 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
         <td>
           <input type="text" class="edit-english" data-index="${index}" value="${escapeHTML(item.english)}" style="background:transparent; border:none; color:var(--text-muted); width:100%; font-size:13px; outline:none; border-bottom:1px dashed var(--border);">
         </td>
-        <td style="text-align: right; font-weight:700;">¥${Math.round(item.price * currentTaxMultiplier).toLocaleString()}</td>
+        <td style="text-align: right; font-weight:700;">
+          <span style="color: var(--text-dim); font-size: 13px; font-weight:700; margin-right: 2px;">¥</span>
+          <input type="number" class="edit-price" data-index="${index}" value="${Math.round(item.price * currentTaxMultiplier)}" style="background:transparent; border:none; color:var(--text); width:75px; font-size:13px; font-weight:700; text-align:right; outline:none; border-bottom:1px dashed var(--border); font-family:var(--font-body);">
+        </td>
         <td style="text-align: center;">
           <div class="segment-control">
             <button class="segment-btn ${item.assignedTo === 'Bishnu' ? 'active' : ''}" data-index="${index}" data-split="Bishnu">Bishnu</button>
@@ -644,6 +648,14 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
       tr.querySelector('.edit-english').addEventListener('change', (e) => {
         const idx = parseInt(e.target.getAttribute('data-index'));
         currentScannedItems[idx].english = e.target.value;
+      });
+
+      // Price inputs change hook
+      tr.querySelector('.edit-price').addEventListener('change', (e) => {
+        const idx = parseInt(e.target.getAttribute('data-index'));
+        const newPrice = Math.abs(parseInt(e.target.value) || 0);
+        // Save base price by dividing by currentTaxMultiplier
+        currentScannedItems[idx].price = Math.round(newPrice / currentTaxMultiplier);
       });
 
       receiptItemsBody.appendChild(tr);
