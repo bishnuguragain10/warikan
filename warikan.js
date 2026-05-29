@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else mimeType = 'image/jpeg'; // Default safe fallback for all camera photos
       }
       
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
       const prompt = `You are analyzing a Japanese supermarket or convenience store receipt photo. Your job is to extract all purchase information.
 
