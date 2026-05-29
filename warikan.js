@@ -1,5 +1,7 @@
 // warikan.js
-// Handles local Tesseract OCR, Japanese translation maps, split selectors, manual entry forms, and settlement math
+// Handles Gemini AI OCR, Japanese translation maps, split selectors, manual entry forms, and settlement math
+
+const GEMINI_API_KEY = 'AIzaSyAGpRlz8kPsH8RXe6EHg13EkJRyxRnL24U';
 
 let currentLedger = [];
 let currentScannedItems = [];
@@ -79,29 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const sheetsSyncUrlInput = document.getElementById('sheets-sync-url');
   const btnSaveSync = document.getElementById('btn-save-sync');
 
-  // Gemini AI Elements
-  const geminiApiKeyInput = document.getElementById('gemini-api-key');
-  const btnSaveGemini = document.getElementById('btn-save-gemini');
-
   // --- INITIAL RUN ---
-  // Load saved Gemini Key
-  const savedGeminiKey = localStorage.getItem('warikanGeminiKey') || '';
-  if (geminiApiKeyInput) {
-    geminiApiKeyInput.value = savedGeminiKey;
-  }
-
-  if (btnSaveGemini) {
-    btnSaveGemini.addEventListener('click', () => {
-      const key = geminiApiKeyInput.value.trim();
-      if (key === '') {
-        localStorage.removeItem('warikanGeminiKey');
-        alert('Gemini AI Scanner key cleared. Falling back to local OCR.');
-        return;
-      }
-      localStorage.setItem('warikanGeminiKey', key);
-      alert('Gemini AI Scanner connected successfully!');
-    });
-  }
 
   // Load saved Sync URL
   const savedSyncUrl = localStorage.getItem('warikanSyncUrl') || '';
@@ -132,12 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- DRAG & DROP FILE LISTENERS ---
   function handleFileInput(file) {
-    const key = localStorage.getItem('warikanGeminiKey');
-    if (key) {
-      parseReceiptWithGemini(file, key);
-    } else {
-      processReceiptImage(file);
-    }
+    // Always use Gemini AI — key is built into the app
+    parseReceiptWithGemini(file, GEMINI_API_KEY);
   }
 
   dropZone.addEventListener('click', () => fileInput.click());
