@@ -189,26 +189,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const base64Data = await fileToBase64(file);
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      
+      // Smart MIME type detection — mobile cameras often send '' or wrong type
+      let mimeType = file.type;
+      if (!mimeType || mimeType === '' || mimeType === 'application/octet-stream') {
+        const name = file.name ? file.name.toLowerCase() : '';
+        if (name.endsWith('.png')) mimeType = 'image/png';
+        else if (name.endsWith('.gif')) mimeType = 'image/gif';
+        else if (name.endsWith('.webp')) mimeType = 'image/webp';
+        else mimeType = 'image/jpeg'; // Default safe fallback for all camera photos
+      }
+      
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
 
-      const prompt = `Analyze this Japanese supermarket/convenience store receipt. Extract:
-1. The store name (in English/Romaji).
-2. The date of the receipt (in YYYY-MM-DD format). If not found, use today's date: ${new Date().toISOString().slice(0, 10)}.
-3. An itemized list of all purchased products.
-For each product:
-- Translate the Japanese name to a clear, clean English name.
-- Extract the Yen price as an integer.
-- Based on the item type, make a smart split suggestion: 'shared' (for groceries, vegetables, toilet paper, laundry soap, household items), 'Bishnu' (for beer, specific snacks/drinks Bishnu likes), or 'Radha' (for cosmetics, skin lotion, specific foods Radha likes). Be intelligent: default to 'shared' for normal food ingredients.
+      const prompt = `You are analyzing a Japanese supermarket or convenience store receipt photo. Your job is to extract all purchase information.
 
-Return ONLY a valid JSON object matching the following structure exactly, with no extra markdown code blocks, backticks, or text:
-{
-  "store": "AEON Supermarket",
-  "date": "2026-05-28",
-  "items": [
-    {"japanese": "牛乳", "english": "Milk 1L", "price": 210, "assignedTo": "shared"},
-    {"japanese": "化粧水", "english": "Skin Lotion", "price": 1200, "assignedTo": "Radha"}
-  ]
-}`;
+IMPORTANT: Look at the image carefully. Find every product line that has a price next to it.
+
+Extract the following:
+1. store - The name of the store (in English). If you can't read it, write "Japanese Supermarket".
+2. date - The purchase date in YYYY-MM-DD format. Look for numbers that could be a date. If not found, use: ${new Date().toISOString().slice(0, 10)}
+3. items - A list of every product purchased.
+
+For each item:
+- japanese: the original Japanese text on the receipt (copy exactly as shown)
+- english: translate the item name to clear English. Be specific (e.g., "Whole Milk 1L" not just "Milk")
+- price: the price as a whole number integer (Yen only, no decimals)
+- assignedTo: one of these three values only: "shared" (household items, food ingredients, cleaning supplies, toiletries), "Bishnu" (beer, alcohol, energy drinks, snacks for one person), or "Radha" (cosmetics, skincare, feminine hygiene)
+
+Rules:
+- Include EVERY item you can see with a price
+- If an item repeats, include it multiple times
+- Ignore totals, taxes, subtotals, and discounts (lines like 合計, 小計, 消費税, 割引)
+- Default to "shared" if unsure about assignedTo
+- prices must be plain integers like 198, not "198円" or "¥198"
+
+Respond with ONLY a raw JSON object — no markdown, no explanation, no backticks. Just the JSON:
+{"store":"AEON","date":"2026-05-28","items":[{"japanese":"牛乳","english":"Whole Milk 1L","price":198,"assignedTo":"shared"}]}`;
 
       const payload = {
         contents: [
@@ -217,13 +234,18 @@ Return ONLY a valid JSON object matching the following structure exactly, with n
               { text: prompt },
               {
                 inlineData: {
-                  mimeType: file.type || "image/jpeg",
+                  mimeType: mimeType,
                   data: base64Data
                 }
               }
             ]
           }
-        ]
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          topP: 0.8,
+          maxOutputTokens: 2048
+        }
       };
 
       ocrProgress.innerText = "Gemini AI is translating & categorizing items...";
@@ -238,24 +260,64 @@ Return ONLY a valid JSON object matching the following structure exactly, with n
 
       const responseData = await response.json();
       
-      if (!response.ok || !responseData.candidates || responseData.candidates.length === 0) {
-        throw new Error(responseData.error?.message || "Invalid API key or network block.");
+      // Check for API-level errors (wrong key, quota, etc.)
+      if (!response.ok) {
+        const errMsg = responseData.error?.message || `API Error ${response.status}`;
+        throw new Error(`Gemini API Error: ${errMsg}`);
+      }
+      
+      if (!responseData.candidates || responseData.candidates.length === 0) {
+        // Could be a safety filter block
+        const blockReason = responseData.promptFeedback?.blockReason || "Unknown";
+        throw new Error(`Gemini blocked the request. Reason: ${blockReason}`);
       }
 
       let aiText = responseData.candidates[0].content.parts[0].text.trim();
       
-      // Clean up markdown blocks if the AI wrapped JSON in ```json ... ```
-      if (aiText.includes("```")) {
-        aiText = aiText.replace(/```json/g, '').replace(/```/g, '').trim();
-      }
-
       console.log("Raw Gemini AI response:", aiText);
 
-      // Parse JSON from Gemini
-      const parsedData = JSON.parse(aiText);
+      // Robust JSON extraction — find the JSON object even if AI adds extra text
+      // Strategy 1: Try direct parse first
+      let parsedData = null;
+      try {
+        parsedData = JSON.parse(aiText);
+      } catch (_e1) {
+        // Strategy 2: Strip markdown code blocks
+        const cleaned = aiText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+        try {
+          parsedData = JSON.parse(cleaned);
+        } catch (_e2) {
+          // Strategy 3: Extract JSON using regex — find the { ... } block
+          const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              parsedData = JSON.parse(jsonMatch[0]);
+            } catch (_e3) {
+              throw new Error(`Could not parse Gemini response as JSON. Check console for raw output.`);
+            }
+          } else {
+            throw new Error(`No JSON structure found in Gemini response. Check console for raw output.`);
+          }
+        }
+      }
       
-      if (!parsedData.items || !Array.isArray(parsedData.items)) {
-        throw new Error("Invalid items structure from Gemini.");
+      if (!parsedData.items || !Array.isArray(parsedData.items) || parsedData.items.length === 0) {
+        throw new Error("Gemini could not find any items in the receipt image. Please make sure the image is clear and well-lit.");
+      }
+
+      // Sanitize items — ensure prices are integers and assignedTo values are valid
+      const validAssignees = ['shared', 'Bishnu', 'Radha'];
+      parsedData.items = parsedData.items
+        .map(item => ({
+          japanese: item.japanese || '',
+          english: item.english || 'Unknown Item',
+          price: Math.abs(parseInt(String(item.price).replace(/[^0-9]/g, '')) || 0),
+          assignedTo: validAssignees.includes(item.assignedTo) ? item.assignedTo : 'shared'
+        }))
+        .filter(item => item.price > 0); // Remove zero-price lines (totals, etc.)
+
+      if (parsedData.items.length === 0) {
+        throw new Error("No valid product prices found after cleaning. Try a clearer photo.");
       }
 
       ocrLoader.style.display = 'none';
@@ -271,9 +333,11 @@ Return ONLY a valid JSON object matching the following structure exactly, with n
     } catch (error) {
       ocrLoader.style.display = 'none';
       console.error("Gemini OCR Error:", error);
-      alert(`Gemini AI Scrape failed: ${error.message}. Falling back to local OCR scanner.`);
-      // Fall back to local Tesseract OCR!
-      processReceiptImage(file);
+      
+      // Show a helpful error message with the real reason
+      const errorMsg = error.message || "Unknown error";
+      alert(`⚠️ Gemini AI could not scan this receipt.\n\nReason: ${errorMsg}\n\nTips:\n• Make sure the photo is clear and well-lit\n• Make sure your Gemini API key is correct\n• Try re-taking the photo closer to the receipt\n\nLoading AEON template as a demo example.`);
+      loadMockTemplate(0);
     }
   }
 
