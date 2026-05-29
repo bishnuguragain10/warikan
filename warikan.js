@@ -184,9 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Preferred models in order — auto-discovery will pick first available one
   const PREFERRED_MODELS = [
-    'gemini-2.0-flash-lite',
-    'gemini-2.0-flash',
     'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
     'gemini-flash-lite-latest',
     'gemini-flash-latest',
     'gemini-1.5-flash',
