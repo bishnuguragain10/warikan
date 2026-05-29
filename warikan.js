@@ -195,8 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'gemini-pro-vision'
   ];
 
-  // Discover which model is actually available for this API key
-  async function discoverGeminiModel(apiKey) {
+  // Discover which models are actually available for this API key, ordered by preference
+  async function getOrderedModelsToTry(apiKey) {
     try {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
       const data = await res.json();
@@ -208,23 +208,33 @@ document.addEventListener('DOMContentLoaded', () => {
       
       console.log('Available models for this API key:', availableModels);
       
-      // Pick the first preferred model that is available
+      // Order available models based on our preference list
+      const orderedToTry = [];
       for (const preferred of PREFERRED_MODELS) {
-        if (availableModels.includes(preferred)) return preferred;
+        if (availableModels.includes(preferred)) {
+          orderedToTry.push(preferred);
+        }
       }
-      // If none of our preferred models match, use the first available one
-      if (availableModels.length > 0) return availableModels[0];
+      
+      // Add any other available models that support generateContent but aren't in our preference list
+      for (const model of availableModels) {
+        if (!orderedToTry.includes(model)) {
+          orderedToTry.push(model);
+        }
+      }
+      
+      if (orderedToTry.length > 0) return orderedToTry;
       throw new Error('No generateContent-capable models found for this API key.');
     } catch (e) {
-      console.warn('Model discovery failed, defaulting to gemini-1.5-flash:', e);
-      return 'gemini-1.5-flash'; // safe fallback
+      console.warn('Model discovery failed, defaulting to preferred models list:', e);
+      return PREFERRED_MODELS; // safe fallback
     }
   }
 
   // --- GEMINI MULTIMODAL AI OCR & TRANSLATION ENGINE ---
   async function parseReceiptWithGemini(file, apiKey) {
     ocrLoader.style.display = 'flex';
-    ocrProgress.innerText = 'Gemini AI: detecting available model...';
+    ocrProgress.innerText = 'Gemini AI: detecting available models...';
 
     try {
       const base64Data = await fileToBase64(file);
@@ -239,14 +249,22 @@ document.addEventListener('DOMContentLoaded', () => {
         else mimeType = 'image/jpeg'; // Default safe fallback for all camera photos
       }
       
-      // Auto-discover the best model available for this API key
-      const chosenModel = await discoverGeminiModel(apiKey);
-      ocrProgress.innerText = `Gemini AI (${chosenModel}) is reading receipt...`;
-      console.log('Using model:', chosenModel);
+      // Auto-discover the best models available for this API key
+      const modelsToTry = await getOrderedModelsToTry(apiKey);
+      console.log('Ordered list of models to try:', modelsToTry);
       
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${chosenModel}:generateContent?key=${apiKey}`;
+      let parsedData = null;
+      let lastError = null;
 
-      const prompt = `You are analyzing a Japanese supermarket or convenience store receipt photo. Your job is to extract all purchase information.
+      for (let i = 0; i < modelsToTry.length; i++) {
+        const chosenModel = modelsToTry[i];
+        ocrProgress.innerText = `Gemini AI (${chosenModel}) is reading receipt... [Attempt ${i + 1}/${modelsToTry.length}]`;
+        console.log(`Attempting OCR with model: ${chosenModel}`);
+
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${chosenModel}:generateContent?key=${apiKey}`;
+
+          const prompt = `You are analyzing a Japanese supermarket or convenience store receipt photo. Your job is to extract all purchase information.
 
 IMPORTANT: Look at the image carefully. Find every product line that has a price next to it.
 
@@ -271,82 +289,92 @@ Rules:
 Respond with ONLY a raw JSON object — no markdown, no explanation, no backticks. Just the JSON:
 {"store":"AEON","date":"2026-05-28","items":[{"japanese":"牛乳","english":"Whole Milk 1L","price":198,"assignedTo":"shared"}]}`;
 
-      const payload = {
-        contents: [
-          {
-            parts: [
-              { text: prompt },
+          const payload = {
+            contents: [
               {
-                inlineData: {
-                  mimeType: mimeType,
-                  data: base64Data
-                }
+                parts: [
+                  { text: prompt },
+                  {
+                    inlineData: {
+                      mimeType: mimeType,
+                      data: base64Data
+                    }
+                  }
+                ]
               }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          topP: 0.8,
-          maxOutputTokens: 2048
-        }
-      };
-
-      ocrProgress.innerText = "Gemini AI is translating & categorizing items...";
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const responseData = await response.json();
-      
-      // Check for API-level errors (wrong key, quota, etc.)
-      if (!response.ok) {
-        const errMsg = responseData.error?.message || `API Error ${response.status}`;
-        throw new Error(`Gemini API Error: ${errMsg}`);
-      }
-      
-      if (!responseData.candidates || responseData.candidates.length === 0) {
-        // Could be a safety filter block
-        const blockReason = responseData.promptFeedback?.blockReason || "Unknown";
-        throw new Error(`Gemini blocked the request. Reason: ${blockReason}`);
-      }
-
-      let aiText = responseData.candidates[0].content.parts[0].text.trim();
-      
-      console.log("Raw Gemini AI response:", aiText);
-
-      // Robust JSON extraction — find the JSON object even if AI adds extra text
-      // Strategy 1: Try direct parse first
-      let parsedData = null;
-      try {
-        parsedData = JSON.parse(aiText);
-      } catch (_e1) {
-        // Strategy 2: Strip markdown code blocks
-        const cleaned = aiText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-        try {
-          parsedData = JSON.parse(cleaned);
-        } catch (_e2) {
-          // Strategy 3: Extract JSON using regex — find the { ... } block
-          const jsonMatch = aiText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            try {
-              parsedData = JSON.parse(jsonMatch[0]);
-            } catch (_e3) {
-              throw new Error(`Could not parse Gemini response as JSON. Check console for raw output.`);
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              topP: 0.8,
+              maxOutputTokens: 2048
             }
-          } else {
-            throw new Error(`No JSON structure found in Gemini response. Check console for raw output.`);
+          };
+
+          ocrProgress.innerText = `Gemini AI is analyzing layout & items with ${chosenModel}...`;
+
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const responseData = await response.json();
+          
+          // Check for API-level errors (wrong key, quota, etc.)
+          if (!response.ok) {
+            const errMsg = responseData.error?.message || `API Error ${response.status}`;
+            throw new Error(`Gemini API Error: ${errMsg}`);
+          }
+          
+          if (!responseData.candidates || responseData.candidates.length === 0) {
+            const blockReason = responseData.promptFeedback?.blockReason || "Unknown";
+            throw new Error(`Gemini blocked the request. Reason: ${blockReason}`);
+          }
+
+          let aiText = responseData.candidates[0].content.parts[0].text.trim();
+          console.log(`Raw Gemini AI response (${chosenModel}):`, aiText);
+
+          // Robust JSON extraction
+          try {
+            parsedData = JSON.parse(aiText);
+          } catch (_e1) {
+            const cleaned = aiText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+            try {
+              parsedData = JSON.parse(cleaned);
+            } catch (_e2) {
+              const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+              if (jsonMatch) {
+                parsedData = JSON.parse(jsonMatch[0]);
+              } else {
+                throw new Error("No JSON structure found in response.");
+              }
+            }
+          }
+          
+          if (!parsedData.items || !Array.isArray(parsedData.items) || parsedData.items.length === 0) {
+            throw new Error("Gemini could not find any items in the receipt image.");
+          }
+
+          console.log(`Successfully parsed receipt using model: ${chosenModel}`);
+          break; // Exit the retry loop!
+
+        } catch (error) {
+          console.warn(`Model ${chosenModel} failed:`, error);
+          lastError = error;
+          // If we have more models, update the UI to show we are falling back
+          if (i < modelsToTry.length - 1) {
+            const nextModel = modelsToTry[i + 1];
+            ocrProgress.innerText = `⚠️ ${chosenModel} busy/quota reached. Retrying with ${nextModel}...`;
+            // Brief pause before retry
+            await new Promise(r => setTimeout(r, 500));
           }
         }
       }
-      
-      if (!parsedData.items || !Array.isArray(parsedData.items) || parsedData.items.length === 0) {
-        throw new Error("Gemini could not find any items in the receipt image. Please make sure the image is clear and well-lit.");
+
+      if (!parsedData) {
+        throw new Error(lastError ? lastError.message : "All available Gemini models failed to process the request.");
       }
 
       // Sanitize items — ensure prices are integers and assignedTo values are valid
