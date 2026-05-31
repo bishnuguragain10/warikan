@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="warikan.css?v=20">
+  <link rel="stylesheet" href="warikan.css?v=21">
   <!-- Tesseract.js local client-side OCR library -->
   <script src="https://unpkg.com/tesseract.js@4.0.1/dist/tesseract.min.js"></script>
 </head>
@@ -225,6 +225,15 @@
               <tbody id="receipt-items-body">
                 <!-- Dynamic parsed rows go here -->
               </tbody>
+              <tfoot id="receipt-table-footer">
+                <tr>
+                  <td colspan="2" style="font-weight: 700; text-align: right; color: var(--text-muted); padding: 14px 16px;">Receipt Grand Total:</td>
+                  <td style="text-align: right; font-weight: 800; font-size: 15px; color: var(--success); padding: 14px 16px;">
+                    ¥<span id="receipt-grand-total">0</span>
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
 
@@ -314,6 +323,6 @@
     </div>
   </div>
 
-  <script src="warikan.js?v=20"></script>
+  <script src="warikan.js?v=21"></script>
 </body>
 </html>

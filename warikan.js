@@ -598,6 +598,19 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
       });
   }
 
+  // --- CALCULATE SCANNED RECEIPT GRAND TOTAL ---
+  function updateReceiptGrandTotal() {
+    const grandTotalSpan = document.getElementById('receipt-grand-total');
+    if (!grandTotalSpan) return;
+
+    let total = 0;
+    currentScannedItems.forEach(item => {
+      total += Math.round(item.price * currentTaxMultiplier);
+    });
+
+    grandTotalSpan.innerText = total.toLocaleString();
+  }
+
   // --- RENDER DYNAMIC CARD EDITOR SPLITTER ---
   function renderReceiptEditor() {
     receiptItemsBody.innerHTML = '';
@@ -661,16 +674,19 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
         currentScannedItems[idx].english = e.target.value;
       });
 
-      // Price inputs change hook
-      tr.querySelector('.edit-price').addEventListener('change', (e) => {
+      // Price inputs real-time input hook
+      tr.querySelector('.edit-price').addEventListener('input', (e) => {
         const idx = parseInt(e.target.getAttribute('data-index'));
         const newPrice = Math.abs(parseInt(e.target.value) || 0);
         // Save base price by dividing by currentTaxMultiplier
-        currentScannedItems[idx].price = Math.round(newPrice / currentTaxMultiplier);
+        currentScannedItems[idx].price = newPrice / currentTaxMultiplier;
+        updateReceiptGrandTotal();
       });
 
       receiptItemsBody.appendChild(tr);
     });
+
+    updateReceiptGrandTotal();
   }
 
   // --- SAVE SCANNED ITEMS TO LEDGER ---
