@@ -266,43 +266,47 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${chosenModel}:generateContent?key=${apiKey}`;
 
-          const prompt = `You are a world-class multimodal AI engineer specializing in layout analysis of dense supermarket receipts.
+          const prompt = `You are a world-class multimodal AI engineer specializing in document parsing of dense supermarket receipts.
 Your task is to extract every purchased product from a Japanese supermarket or convenience store receipt in their EXACT top-to-bottom vertical order with 100% accurate price-to-product pairing.
 
-GEOMETRIC & MATHEMATICAL SELF-CORRECTION PROTOCOL:
-Receipts in camera photos are often rotated, tilted, or physically skewed. To ensure absolute sequence and pricing accuracy, you must perform a 3-step cognitive reasoning sequence inside your JSON output:
+STRICT POSITIONAL INDEX-TO-INDEX MATCHING PROTOCOL:
+Receipts have two main vertical columns: product names on the left, and matching line-item prices on the far right. 
+Because photos are often tilted or skewed, standard horizontal scanning fails. You MUST use a strict positional sequence index matching protocol:
 
-Step 1: Text Path Following (Geometric Alignment)
-Instead of scanning in a flat horizontal pixel coordinate (which gets broken by tilted papers), physically trace the printed text baseline from left to right. Follow the print grain across the paper (even if the receipt is slightly rotated or curved in the photo) to locate the exact price belonging to each product.
+1. LEFT COLUMN SCAN:
+   Scan the left side of the receipt vertically from top to bottom. Identify and extract every purchased product name in a strict 1-based sequential array.
+   List them as: Name 1, Name 2, ..., Name N.
 
-Step 2: Line-by-Line Inner Monologue
-Transcribe each row inside the "visual_scan_scratchpad" before generating the items array.
+2. RIGHT COLUMN SCAN:
+   Scan the right side of the receipt vertically from top to bottom. Identify and extract every line-item price in a strict 1-based sequential array.
+   List them as: Price 1, Price 2, ..., Price N.
 
-Step 3: Mathematical Sum Validation
-- Extract the printed grand total (合計) or subtotal (小計) amount from the bottom of the receipt.
-- Mathematically sum up the prices of all the items you extracted in your scratchpad.
-- Compare your calculated sum against the printed grand total (accounting for tax rate multiplier systems). If the numbers do not align, you have mispaired a price, missed a line, or misread a digit (e.g. reading 188 as 178). Re-scan the image, trace the text baselines, correct the numbers, and output the correct pairing.
+3. STRICT 1-TO-1 INDEX PAIRING RULE:
+   Pair the items STRICTLY by their vertical sequence index:
+   - Name 1 MUST pair with Price 1.
+   - Name 2 MUST pair with Price 2.
+   - Name 3 MUST pair with Price 3.
+   - ...
+   - Name N MUST pair with Price N.
+   This guarantees that if the first item printed on the receipt has a price of 188, Name 1 is paired with Price 1 (188) with 100% mathematical certainty, completely ignoring geometric paper tilts!
+
+4. EXCLUDE SUMMARY BLOCKS:
+   STOP scanning both columns the moment you reach the words "小計" (Subtotal), "合計" (Total), "割引" (Discount), "対象" (tax targets), or "お釣" (change). NEVER include subtotal prices, taxable target total numbers, or cash change in your right-column scan array.
 
 JSON STRUCTURE RULES:
 Your JSON output must contain these keys in this EXACT sequence:
 1. "store": The merchant name in English (e.g., "AEON", "Gyomu Super", "7-Eleven"). If unknown, use "Japanese Supermarket".
 2. "date": The purchase date in YYYY-MM-DD format. Look for the printed date on the receipt. If missing, use: ${new Date().toISOString().slice(0, 10)}
 3. "taxRate": Look at the tax summary lines at the very bottom. If a wholesome tax is added to the prices (exclusive tax system), output 8 or 10. If tax is already included in printed prices (税込), or there is no tax, output 0.
-4. "printed_grand_total": The exact grand total or subtotal amount physically printed at the bottom of the receipt (as a clean integer).
-5. "calculated_items_sum": The sum of the prices of all items you extracted in the "items" array (as a clean integer).
-6. "sum_validation_match": "Yes" if your calculated sum matches (or is extremely close due to tax roundings) the printed grand total, otherwise "No".
-7. "visual_scan_scratchpad": An array of strings. You must write one string for EVERY line on the receipt from top to bottom (stopping at the subtotal).
-   For each line, physically transcribe: "Line [N]: [Japanese name] on left -> [Price] on right. Match: [Yes/No]."
-8. "items": Clean array of purchased items in exact vertical order.
+4. "left_column_names": Sequential array of extracted Japanese product names from top to bottom.
+5. "right_column_prices": Sequential array of extracted line-item prices (integers) from top to bottom.
+6. "items": Clean array of paired item objects, built by strictly matching "left_column_names[i]" to "right_column_prices[i]" 1-to-1.
 
 For each item object in the "items" array:
 - "japanese": The original Japanese name (strip tax rate symbols like "*" or "軽" completely, e.g. "たまご 軽" should be extracted as "たまご").
 - "english": Specific English translation (e.g. "Whole Milk 1L" instead of just "Milk").
-- "price": The exact printed line-item price as a clean integer (Yen only, no decimals, no currency symbols).
+- "price": The exact paired line-item price as a clean integer (Yen only, no decimals, no currency symbols).
 - "assignedTo": Split suggestion - "shared" (general groceries, milk, eggs, bread, household cleaning supplies, veggies), "Bishnu" (beers, alcohol, energy drinks, single-serving snacks), or "Radha" (cosmetics, skincare, beauty products). Default to "shared" if unsure.
-
-PHYSICAL SUMMARY BOUNDARY ANCHORS:
-STOP scanning items immediately the moment you see "小計" (Subtotal), "合計" (Total), "割引" (Discount), "対象" (tax targets), or "お釣" (change). Never extract summary fields.
 
 Respond with ONLY a raw, minified JSON object matching this schema. No markdown wrappers, no explaining, no backticks, no text wrappers.
 Example JSON structure:
@@ -310,16 +314,11 @@ Example JSON structure:
   "store": "AEON",
   "date": "2026-05-28",
   "taxRate": 8,
-  "printed_grand_total": 418,
-  "calculated_items_sum": 418,
-  "sum_validation_match": "Yes",
-  "visual_scan_scratchpad": [
-    "Line 1: 牛乳 on left -> 198 on right. Match: Yes",
-    "Line 2: ビール on left -> 220 on right. Match: Yes"
-  ],
+  "left_column_names": ["牛乳 1L", "ビール缶"],
+  "right_column_prices": [198, 220],
   "items": [
-    {"japanese":"牛乳","english":"Whole Milk 1L","price":198,"assignedTo":"shared"},
-    {"japanese":"ビール","english":"Beer","price":220,"assignedTo":"Bishnu"}
+    {"japanese":"牛乳 1L","english":"Whole Milk 1L","price":198,"assignedTo":"shared"},
+    {"japanese":"ビール缶","english":"Beer Can","price":220,"assignedTo":"Bishnu"}
   ]
 }`;
 
