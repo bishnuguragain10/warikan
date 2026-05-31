@@ -266,33 +266,40 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${chosenModel}:generateContent?key=${apiKey}`;
 
-          const prompt = `You are analyzing a Japanese supermarket or convenience store receipt photo. Your job is to extract all purchase information.
+          const prompt = `You are an expert Japanese OCR layout analyzer. Your mission is to extract every purchased product from a Japanese supermarket or convenience store receipt with 100% accurate vertical sequence alignment and correct price-to-product pairing.
 
-CRITICAL INSTRUCTION: You MUST read the receipt image line-by-line from the top of the slip to the bottom. Extract every product in the exact sequence it appears vertically on the physical receipt paper. DO NOT stop extracting items until you have reached the final subtotal (小計) or grand total (合計) lines. Check the bottom of the list carefully so that no items (like salt, condiments, or fruits) are left out. DO NOT group items by category, price, or assignee. The items array in your JSON output MUST match the top-to-bottom vertical order of the printed receipt, line by line.
+CRITICAL PHYSICAL LAYOUT INSTRUCTIONS (Horizontal & Vertical Rules):
+1. STRICT HORIZONTAL ALIGNMENT ("RULER" RULE):
+   - Receipts are wide but text is squished. For every line, look at the Japanese product name on the left.
+   - Mentally draw a strict, perfectly straight horizontal line directly to the right side of the paper to find the price printed on that exact same visual row.
+   - NEVER pair a product name with a price that is printed slightly higher or lower on the page. Each line must be paired strictly left-to-right.
+   
+2. STRICT VERTICAL ORDER SEQUENCE:
+   - Extract and list items in the exact same top-to-bottom sequence they appear physically on the receipt paper.
+   - If Product A is physically printed above Product B, Product A MUST appear before Product B in the returned "items" array. Do NOT group, sort, or reorganize items.
 
-IMPORTANT: Look at the image carefully. Find every product line that has a price next to it.
+3. PHYSICAL SUMMARY BOUNDARY ANCHORS:
+   - The primary item list is strictly bounded at the top by the store header/date and at the bottom by "小計" (Subtotal) or "合計" (Total).
+   - STOP scanning items immediately the moment you see "小計" (Subtotal), "合計" (Total), "割引" (Discount), "対象" (Tax Target total summaries like 8%対象), "非課税", or "お釣" (Change). 
+   - NEVER extract tax targets, subtotal summaries, discounts, or cash totals as purchase items.
 
-Extract the following:
-1. store - The name of the store (in English). If you can't read it, write "Japanese Supermarket".
-2. date - The purchase date in YYYY-MM-DD format. Look for numbers that could be a date. If not found, use: ${new Date().toISOString().slice(0, 10)}
-3. taxRate - The wholesome tax percentage added to the items on this receipt. Look at the bottom of the receipt to see if there is a wholesome tax percentage mentioned (like 8% or 10%). If a wholesome tax is added to the items (meaning the printed item prices are tax-exclusive), output: 8 or 10. If tax is already included in the printed item prices (税込) or there is no tax, output: 0.
-4. items - A list of every product purchased.
+4. TEXT SANITIZATION:
+   - If an item name contains tax-rate symbols (such as "*" or "軽"), strip these symbols out of the "japanese" field (e.g. "たまご 軽" should be extracted as "たまご").
+   - Extract prices as clean integer numbers only (e.g. "188" not "188円" or "¥188").
 
-For each item:
-- japanese: the original Japanese text on the receipt (copy exactly as shown)
-- english: translate the item name to clear English. Be specific (e.g., "Whole Milk 1L" not just "Milk")
-- price: the price as a whole number integer (Yen only, no decimals)
-- assignedTo: one of these three values only: "shared" (household items, food ingredients, cleaning supplies, toiletries), "Bishnu" (beer, alcohol, energy drinks, snacks for one person), or "Radha" (cosmetics, skincare, feminine hygiene)
+EXTRACT THE FOLLOWING FIELDS:
+1. store: The merchant name in clear English (e.g., "AEON", "Gyomu Super", "7-Eleven"). If unknown, use "Japanese Supermarket".
+2. date: The purchase date in YYYY-MM-DD format. Look for the printed date on the receipt. If missing, use: ${new Date().toISOString().slice(0, 10)}
+3. taxRate: Look at the tax summary lines at the very bottom. If a wholesome tax is added to the prices (exclusive tax system), output 8 or 10. If tax is already included in printed prices (税込), or there is no tax, output 0.
+4. items: Array of purchased items.
 
-Rules:
-- Include EVERY single item you can see with a price, making sure not to skip the last items at the bottom.
-- Extract and list the items in the EXACT SAME ORDER as they appear from top to bottom on the receipt. Do not re-order, sort, or skip any items.
-- If an item repeats, include it multiple times
-- Ignore totals, taxes, subtotals, and discounts (lines like 合計, 小計, 消費税, 割引)
-- Default to "shared" if unsure about assignedTo
-- prices must be plain integers like 198, not "198円" or "¥198"
+For each item object:
+- "japanese": The original Japanese name (stripped of * or 軽).
+- "english": Specific English translation (e.g., "Whole Milk 1L" instead of just "Milk").
+- "price": The exact printed line-item price as a whole integer Yen value.
+- "assignedTo": Split suggestion - "shared" (general groceries, milk, eggs, bread, household cleaning supplies, veggies), "Bishnu" (beers, alcohol, energy drinks, single-serving snacks), or "Radha" (cosmetics, skincare, beauty products). Default to "shared" if unsure.
 
-Respond with ONLY a raw JSON object — no markdown, no explanation, no backticks. Just the JSON:
+Output ONLY a raw, minified JSON object matching this schema. No markdown, no explaining, no backticks, no text wrappers:
 {"store":"AEON","date":"2026-05-28","taxRate":8,"items":[{"japanese":"牛乳","english":"Whole Milk 1L","price":198,"assignedTo":"shared"}]}`;
 
           const payload = {
