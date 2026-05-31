@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Tax Mode elements
   const taxBtnNone = document.getElementById('tax-btn-none');
   const taxBtn8 = document.getElementById('tax-btn-8');
+  const taxBtn10 = document.getElementById('tax-btn-10');
 
   // Ledger Table
   const ledgerBody = document.getElementById('ledger-body');
@@ -274,7 +275,8 @@ IMPORTANT: Look at the image carefully. Find every product line that has a price
 Extract the following:
 1. store - The name of the store (in English). If you can't read it, write "Japanese Supermarket".
 2. date - The purchase date in YYYY-MM-DD format. Look for numbers that could be a date. If not found, use: ${new Date().toISOString().slice(0, 10)}
-3. items - A list of every product purchased.
+3. taxRate - The wholesome tax percentage added to the items on this receipt. Look at the bottom of the receipt to see if there is a wholesome tax percentage mentioned (like 8% or 10%). If a wholesome tax is added to the items (meaning the printed item prices are tax-exclusive), output: 8 or 10. If tax is already included in the printed item prices (税込) or there is no tax, output: 0.
+4. items - A list of every product purchased.
 
 For each item:
 - japanese: the original Japanese text on the receipt (copy exactly as shown)
@@ -291,7 +293,7 @@ Rules:
 - prices must be plain integers like 198, not "198円" or "¥198"
 
 Respond with ONLY a raw JSON object — no markdown, no explanation, no backticks. Just the JSON:
-{"store":"AEON","date":"2026-05-28","items":[{"japanese":"牛乳","english":"Whole Milk 1L","price":198,"assignedTo":"shared"}]}`;
+{"store":"AEON","date":"2026-05-28","taxRate":8,"items":[{"japanese":"牛乳","english":"Whole Milk 1L","price":198,"assignedTo":"shared"}]}`;
 
           const payload = {
             contents: [
@@ -404,12 +406,24 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
       receiptPayer.value = "Bishnu";
       currentScannedItems = parsedData.items;
 
-      // Reset tax multiplier to default (no tax added / 1.0)
-      currentTaxMultiplier = 1.0;
-      [taxBtnNone, taxBtn8].forEach(btn => {
+      // Auto-initialize tax selector from AI extraction
+      const extractedTax = parseInt(parsedData.taxRate) || 0;
+      console.log('AI Extracted Tax Rate:', extractedTax);
+      
+      [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
         if (btn) btn.classList.remove('active');
       });
-      if (taxBtnNone) taxBtnNone.classList.add('active');
+
+      if (extractedTax === 8) {
+        currentTaxMultiplier = 1.08;
+        if (taxBtn8) taxBtn8.classList.add('active');
+      } else if (extractedTax === 10) {
+        currentTaxMultiplier = 1.10;
+        if (taxBtn10) taxBtn10.classList.add('active');
+      } else {
+        currentTaxMultiplier = 1.0;
+        if (taxBtnNone) taxBtnNone.classList.add('active');
+      }
 
       renderReceiptEditor();
 
@@ -571,7 +585,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
         
         // Reset tax multiplier to default (no tax added / 1.0)
         currentTaxMultiplier = 1.0;
-        [taxBtnNone, taxBtn8].forEach(btn => {
+        [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
           if (btn) btn.classList.remove('active');
         });
         if (taxBtnNone) taxBtnNone.classList.add('active');
@@ -743,7 +757,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
   // --- TAX MODE SELECTION HANDLERS ---
   function setTaxMultiplier(multiplier, activeBtn) {
     currentTaxMultiplier = multiplier;
-    [taxBtnNone, taxBtn8].forEach(btn => {
+    [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
       if (btn) btn.classList.remove('active');
     });
     if (activeBtn) activeBtn.classList.add('active');
@@ -752,6 +766,7 @@ Respond with ONLY a raw JSON object — no markdown, no explanation, no backtick
 
   if (taxBtnNone) taxBtnNone.addEventListener('click', () => setTaxMultiplier(1.0, taxBtnNone));
   if (taxBtn8) taxBtn8.addEventListener('click', () => setTaxMultiplier(1.08, taxBtn8));
+  if (taxBtn10) taxBtn10.addEventListener('click', () => setTaxMultiplier(1.10, taxBtn10));
 
   // --- PROFILE MENU DROPDOWN HANDLER (Dynamic Reparenting) ---
   const profileMenuBtn = document.getElementById('profile-menu-btn');

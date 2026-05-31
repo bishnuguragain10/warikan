@@ -590,6 +590,12 @@ body {
   color: #93c5fd;
 }
 
+.segment-btn.active[data-tax="10"] {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: #c084fc;
+}
+
 /* Unassigned Warning Row Highlight */
 .row-unassigned {
   background: rgba(245, 158, 11, 0.02);
