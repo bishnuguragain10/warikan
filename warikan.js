@@ -266,41 +266,47 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${chosenModel}:generateContent?key=${apiKey}`;
 
-          const prompt = `You are an expert Japanese OCR layout analyzer. Your mission is to extract every purchased product from a Japanese supermarket or convenience store receipt with 100% accurate vertical sequence alignment and correct price-to-product pairing.
+          const prompt = `You are a world-class multimodal AI engineer specializing in layout analysis of dense supermarket receipts.
+Your task is to extract every purchased product from a Japanese supermarket or convenience store receipt in their EXACT top-to-bottom vertical order with 100% accurate price-to-product pairing.
 
-CRITICAL PHYSICAL LAYOUT INSTRUCTIONS (Horizontal & Vertical Rules):
-1. STRICT HORIZONTAL ALIGNMENT ("RULER" RULE):
-   - Receipts are wide but text is squished. For every line, look at the Japanese product name on the left.
-   - Mentally draw a strict, perfectly straight horizontal line directly to the right side of the paper to find the price printed on that exact same visual row.
-   - NEVER pair a product name with a price that is printed slightly higher or lower on the page. Each line must be paired strictly left-to-right.
-   
-2. STRICT VERTICAL ORDER SEQUENCE:
-   - Extract and list items in the exact same top-to-bottom sequence they appear physically on the receipt paper.
-   - If Product A is physically printed above Product B, Product A MUST appear before Product B in the returned "items" array. Do NOT group, sort, or reorganize items.
+To ensure success, you MUST use a multi-pass vertical layout scan inside the JSON output itself. This forces your visual attention mechanism to perform physical row alignment before building the final clean data.
 
-3. PHYSICAL SUMMARY BOUNDARY ANCHORS:
-   - The primary item list is strictly bounded at the top by the store header/date and at the bottom by "小計" (Subtotal) or "合計" (Total).
-   - STOP scanning items immediately the moment you see "小計" (Subtotal), "合計" (Total), "割引" (Discount), "対象" (Tax Target total summaries like 8%対象), "非課税", or "お釣" (Change). 
-   - NEVER extract tax targets, subtotal summaries, discounts, or cash totals as purchase items.
+JSON STRUCTURE RULES:
+Your JSON output must contain the following keys in this EXACT sequence:
+1. "store": The merchant name in clear English (e.g., "AEON", "Gyomu Super", "7-Eleven"). If unknown, use "Japanese Supermarket".
+2. "date": The purchase date in YYYY-MM-DD format. Look for the printed date on the receipt. If missing, use: ${new Date().toISOString().slice(0, 10)}
+3. "taxRate": Look at the tax summary lines at the very bottom. If a wholesome tax is added to the prices (exclusive tax system), output 8 or 10. If tax is already included in printed prices (税込), or there is no tax, output 0.
+4. "visual_scan_scratchpad": An array of strings. You must write one string for EVERY line on the receipt from top to bottom (stopping at the subtotal).
+   For each line, physically transcribe: "Line [N]: [Japanese name] on left -> [Price] on right. Match: [Yes/No]."
+   This scratchpad acts as an intellectual loading-dock, forcing your attention mechanism to scan the receipt in exact horizontal lines.
+5. "items": The clean array of items parsed from the scratchpad in the EXACT same vertical sequence.
 
-4. TEXT SANITIZATION:
-   - If an item name contains tax-rate symbols (such as "*" or "軽"), strip these symbols out of the "japanese" field (e.g. "たまご 軽" should be extracted as "たまご").
-   - Extract prices as clean integer numbers only (e.g. "188" not "188円" or "¥188").
-
-EXTRACT THE FOLLOWING FIELDS:
-1. store: The merchant name in clear English (e.g., "AEON", "Gyomu Super", "7-Eleven"). If unknown, use "Japanese Supermarket".
-2. date: The purchase date in YYYY-MM-DD format. Look for the printed date on the receipt. If missing, use: ${new Date().toISOString().slice(0, 10)}
-3. taxRate: Look at the tax summary lines at the very bottom. If a wholesome tax is added to the prices (exclusive tax system), output 8 or 10. If tax is already included in printed prices (税込), or there is no tax, output 0.
-4. items: Array of purchased items.
-
-For each item object:
-- "japanese": The original Japanese name (stripped of * or 軽).
-- "english": Specific English translation (e.g., "Whole Milk 1L" instead of just "Milk").
-- "price": The exact printed line-item price as a whole integer Yen value.
+For each item object in the "items" array:
+- "japanese": The original Japanese name (strip tax rate symbols like "*" or "軽" completely, e.g. "たまご 軽" should be extracted as "たまご").
+- "english": Specific English translation (e.g. "Whole Milk 1L" instead of just "Milk").
+- "price": The exact printed line-item price as a clean integer (Yen only, no decimals, no currency symbols).
 - "assignedTo": Split suggestion - "shared" (general groceries, milk, eggs, bread, household cleaning supplies, veggies), "Bishnu" (beers, alcohol, energy drinks, single-serving snacks), or "Radha" (cosmetics, skincare, beauty products). Default to "shared" if unsure.
 
-Output ONLY a raw, minified JSON object matching this schema. No markdown, no explaining, no backticks, no text wrappers:
-{"store":"AEON","date":"2026-05-28","taxRate":8,"items":[{"japanese":"牛乳","english":"Whole Milk 1L","price":198,"assignedTo":"shared"}]}`;
+CRITICAL PHYSICAL LAYOUT CONSTRAINTS:
+- STRICT HORIZONTAL ALIGNMENT ("RULER" RULE): Draw a straight horizontal line for every product line. Never pair a product name on visual row A with a price on visual row B.
+- STRICT VERTICAL SEQUENCE: If Product A is physically printed above Product B, Product A MUST appear before Product B in both the scratchpad and the items array.
+- PHYSICAL SUMMARY BOUNDARY ANCHORS: The primary item list is strictly bounded at the bottom by "小計" (Subtotal) or "合計" (Total). STOP scanning items immediately the moment you see "小計", "合計", "割引", "対象" (tax targets), or "お釣" (change). Never extract summary fields.
+
+Output ONLY a raw, minified JSON object matching this schema. No markdown wrappers, no explaining, no backticks, no text wrappers.
+Example JSON structure:
+{
+  "store": "AEON",
+  "date": "2026-05-28",
+  "taxRate": 8,
+  "visual_scan_scratchpad": [
+    "Line 1: 牛乳 on left -> 198 on right. Match: Yes",
+    "Line 2: ビール on left -> 220 on right. Match: Yes"
+  ],
+  "items": [
+    {"japanese":"牛乳","english":"Whole Milk 1L","price":198,"assignedTo":"shared"},
+    {"japanese":"ビール","english":"Beer","price":220,"assignedTo":"Bishnu"}
+  ]
+}`;
 
           const payload = {
             contents: [
