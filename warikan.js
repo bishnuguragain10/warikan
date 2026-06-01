@@ -234,6 +234,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 150);
 
+  if (receiptPayer) {
+    receiptPayer.addEventListener('change', () => {
+      saveTempEditorState();
+    });
+  }
+
+  if (receiptDateInput) {
+    receiptDateInput.addEventListener('change', () => {
+      saveTempEditorState();
+    });
+  }
+
   // --- DYNAMIC MONTH GROUPING & FILTER POPULATION LOGIC ---
   function updateMonthSelector() {
     if (!ledgerMonthFilter) return;
@@ -287,6 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   loadLedger();
+  restoreTempEditorState();
 
   // --- DRAG & DROP FILE LISTENERS ---
   function handleFileInput(file) {
@@ -889,6 +902,7 @@ Example JSON structure:
             const dot = tr.querySelector('.warning-dot');
             if (dot) dot.remove();
           }
+          saveTempEditorState();
         });
       });
 
@@ -937,6 +951,7 @@ Example JSON structure:
       tr.querySelector('.edit-english').addEventListener('change', (e) => {
         const idx = parseInt(e.target.getAttribute('data-index'));
         currentScannedItems[idx].english = e.target.value;
+        saveTempEditorState();
       });
 
       // Price inputs real-time input hook
@@ -946,12 +961,14 @@ Example JSON structure:
         // Save base price by dividing by currentTaxMultiplier
         currentScannedItems[idx].price = newPrice / currentTaxMultiplier;
         updateReceiptGrandTotal();
+        saveTempEditorState();
       });
 
       receiptItemsBody.appendChild(tr);
     });
 
     updateReceiptGrandTotal();
+    saveTempEditorState();
   }
 
   // --- SAVE SCANNED ITEMS TO LEDGER ---
@@ -1037,6 +1054,7 @@ Example JSON structure:
       alert('All receipt items successfully itemized and committed to your ledger!');
     }
 
+    clearTempEditorState();
     sectionReceiptEditor.style.display = 'none';
     currentScannedItems = [];
     currentReceiptPhotoBase64 = null; // Clear image buffer
@@ -1044,6 +1062,7 @@ Example JSON structure:
 
   btnCancelReceipt.addEventListener('click', () => {
     if (confirm('Cancel scan? Scanned lines will be lost.')) {
+      clearTempEditorState();
       sectionReceiptEditor.style.display = 'none';
       currentScannedItems = [];
       currentReceiptPhotoBase64 = null; // Clear image buffer
@@ -1286,6 +1305,85 @@ Example JSON structure:
     } finally {
       calculateSettlement();
       renderLedgerTable();
+    }
+  }
+
+  // --- SCANNER AUTO-SAVE STATE ENGINE ---
+  async function saveTempEditorState() {
+    try {
+      const state = {
+        storeName: receiptStoreName.innerText,
+        date: receiptDateInput.value,
+        payer: receiptPayer.value,
+        taxMultiplier: currentTaxMultiplier,
+        items: currentScannedItems
+      };
+      localStorage.setItem('warikanTempEditorState', JSON.stringify(state));
+      
+      if (currentReceiptPhotoBase64) {
+        await saveReceiptPhoto('temp_scanned_photo', currentReceiptPhotoBase64);
+      }
+      console.log("Scanner state auto-saved successfully.");
+    } catch (err) {
+      console.error("Error auto-saving scanner state:", err);
+    }
+  }
+
+  async function clearTempEditorState() {
+    try {
+      localStorage.removeItem('warikanTempEditorState');
+      await deleteReceiptPhoto('temp_scanned_photo');
+      console.log("Scanner temporary auto-save state cleared.");
+    } catch (err) {
+      console.error("Error clearing scanner temp state:", err);
+    }
+  }
+
+  async function restoreTempEditorState() {
+    try {
+      const raw = localStorage.getItem('warikanTempEditorState');
+      if (!raw) return;
+      
+      const state = JSON.parse(raw);
+      if (!state || !state.items || state.items.length === 0) return;
+      
+      console.log("Recovered previous scanner session. Restoring...");
+      
+      currentScannedItems = state.items;
+      currentTaxMultiplier = state.taxMultiplier || 1.0;
+      
+      receiptStoreName.innerText = state.storeName || "Scanned Store Bill";
+      receiptDateInput.value = state.date || new Date().toISOString().slice(0, 10);
+      receiptPayer.value = state.payer || "";
+      
+      // Load photo
+      const tempPhoto = await getReceiptPhoto('temp_scanned_photo');
+      if (tempPhoto) {
+        currentReceiptPhotoBase64 = tempPhoto;
+      }
+      
+      // Update tax segment selector states
+      [taxBtnNone, taxBtn8, taxBtn10].forEach(btn => {
+        if (btn) btn.classList.remove('active');
+      });
+      if (currentTaxMultiplier === 1.08 && taxBtn8) {
+        taxBtn8.classList.add('active');
+      } else if (currentTaxMultiplier === 1.10 && taxBtn10) {
+        taxBtn10.classList.add('active');
+      } else if (taxBtnNone) {
+        taxBtnNone.classList.add('active');
+      }
+      
+      // Render
+      renderReceiptEditor();
+      
+      // Scroll to editor smoothly
+      setTimeout(() => {
+        sectionReceiptEditor.scrollIntoView({ behavior: 'smooth' });
+      }, 500);
+      
+    } catch (err) {
+      console.error("Error restoring scanner session:", err);
     }
   }
 
