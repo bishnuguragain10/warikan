@@ -650,7 +650,7 @@ Example JSON structure:
         if (taxBtnNone) taxBtnNone.classList.add('active');
       }
 
-      renderReceiptEditor();
+      renderReceiptEditor(true);
 
     } catch (error) {
       ocrLoader.style.display = 'none';
@@ -781,7 +781,7 @@ Example JSON structure:
     receiptPayer.value = "";
     receiptPayer.selectedIndex = 0;
     
-    renderReceiptEditor();
+    renderReceiptEditor(true);
   }
 
   // --- DYNAMIC DICTIONARY LOOKUP & TRANSLATION ENGINE ---
@@ -817,7 +817,7 @@ Example JSON structure:
         });
         if (taxBtnNone) taxBtnNone.classList.add('active');
 
-        renderReceiptEditor();
+        renderReceiptEditor(true);
       })
       .catch(err => {
         console.error('Error loading mock data:', err);
@@ -839,12 +839,14 @@ Example JSON structure:
   }
 
   // --- RENDER DYNAMIC CARD EDITOR SPLITTER ---
-  function renderReceiptEditor() {
+  function renderReceiptEditor(shouldScroll = false) {
     receiptItemsBody.innerHTML = '';
     sectionReceiptEditor.style.display = 'block';
     
-    // Scroll down to editor smoothly
-    sectionReceiptEditor.scrollIntoView({ behavior: 'smooth' });
+    if (shouldScroll) {
+      // Scroll down to editor smoothly
+      sectionReceiptEditor.scrollIntoView({ behavior: 'smooth' });
+    }
 
     currentScannedItems.forEach((item, index) => {
       const tr = document.createElement('tr');
