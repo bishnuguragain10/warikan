@@ -840,6 +840,11 @@ Example JSON structure:
 
   // --- RENDER DYNAMIC CARD EDITOR SPLITTER ---
   function renderReceiptEditor(shouldScroll = false) {
+    const container = document.querySelector('.receipt-items-container');
+    if (container && container.offsetHeight > 0) {
+      container.style.minHeight = `${container.offsetHeight}px`;
+    }
+
     receiptItemsBody.innerHTML = '';
     sectionReceiptEditor.style.display = 'block';
     
@@ -914,6 +919,19 @@ Example JSON structure:
         btnSplit.addEventListener('click', (e) => {
           const idx = parseInt(e.currentTarget.getAttribute('data-index'));
           const originalItem = currentScannedItems[idx];
+          
+          // Live capture of current input values directly from the DOM before splitting
+          const rowEl = e.currentTarget.closest('tr');
+          const englishInput = rowEl ? rowEl.querySelector('.edit-english') : null;
+          const priceInput = rowEl ? rowEl.querySelector('.edit-price') : null;
+          
+          if (englishInput) {
+            originalItem.english = englishInput.value;
+          }
+          if (priceInput) {
+            const rawVal = Math.abs(parseInt(priceInput.value) || 0);
+            originalItem.price = rawVal / currentTaxMultiplier;
+          }
           
           let parsedQty = null;
           let matchedStr = null;
@@ -1035,6 +1053,12 @@ Example JSON structure:
 
     updateReceiptGrandTotal();
     saveTempEditorState();
+
+    if (container) {
+      setTimeout(() => {
+        container.style.minHeight = '';
+      }, 50);
+    }
   }
 
   // --- SAVE SCANNED ITEMS TO LEDGER ---
