@@ -861,9 +861,14 @@ Example JSON structure:
           </div>
         </td>
         <td style="text-align: center;">
-          <button class="btn-split-row" data-index="${index}" title="Split item price 50/50" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); color: #c084fc; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight:600; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: all 0.2s; outline: none;">
-            ✂️ Split
-          </button>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <button class="btn-split-row" data-index="${index}" title="Split item price 50/50" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); color: #c084fc; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight:600; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: all 0.2s; outline: none;">
+              ✂️ Split
+            </button>
+            <button class="btn-delete-scanner-row" data-index="${index}" title="Delete this line-item" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); color: #ef4444; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight:600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; outline: none;">
+              🗑️
+            </button>
+          </div>
         </td>
       `;
 
@@ -908,6 +913,20 @@ Example JSON structure:
           
           // Insert duplicate right below the original item in the scanned items array
           currentScannedItems.splice(idx + 1, 0, duplicate);
+          
+          // Re-render editor
+          renderReceiptEditor();
+        });
+      }
+
+      // Delete scanner row listener
+      const btnDeleteScanner = tr.querySelector('.btn-delete-scanner-row');
+      if (btnDeleteScanner) {
+        btnDeleteScanner.addEventListener('click', (e) => {
+          const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+          
+          // Remove item from scanned items array
+          currentScannedItems.splice(idx, 1);
           
           // Re-render editor
           renderReceiptEditor();
