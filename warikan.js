@@ -913,15 +913,79 @@ Example JSON structure:
           const idx = parseInt(e.currentTarget.getAttribute('data-index'));
           const originalItem = currentScannedItems[idx];
           
-          // Halve the original item's base price
-          const halvedPrice = originalItem.price / 2;
-          originalItem.price = halvedPrice;
+          let parsedQty = null;
+          let matchedStr = null;
           
-          // Create duplicate item with halved price
+          // Pattern A: Parentheses (e.g. "(3 pcs)", "(3 items)", "(3 pc)", "(3 item)")
+          const regexParen = /\((\d+)\s*(pcs|items|pc|item)\)/i;
+          const matchParen = originalItem.english.match(regexParen);
+          
+          // Pattern B: Multiplier count (e.g. "x3", "x 3", "x-3")
+          const regexMult = /\bx\s*(\d+)\b/i;
+          const matchMult = originalItem.english.match(regexMult);
+          
+          // Pattern C: Plain counts at the end/middle (e.g. "3 pcs", "3 items", "3 pc")
+          const regexPlain = /\b(\d+)\s*(pcs|items|pc|item)\b/i;
+          const matchPlain = originalItem.english.match(regexPlain);
+          
+          if (matchParen) {
+            parsedQty = parseInt(matchParen[1]);
+            matchedStr = matchParen[0];
+          } else if (matchMult) {
+            parsedQty = parseInt(matchMult[1]);
+            matchedStr = matchMult[0];
+          } else if (matchPlain) {
+            parsedQty = parseInt(matchPlain[1]);
+            matchedStr = matchPlain[0];
+          }
+          
+          let halvedPrice1 = originalItem.price / 2;
+          let halvedPrice2 = originalItem.price / 2;
+          let newName1 = originalItem.english;
+          let newName2 = originalItem.english + " (Split)";
+          
+          if (parsedQty && parsedQty > 1) {
+            const qty1 = Math.floor(parsedQty / 2);
+            const qty2 = parsedQty - qty1;
+            
+            // Proportional price splits
+            halvedPrice1 = originalItem.price * (qty1 / parsedQty);
+            halvedPrice2 = originalItem.price - halvedPrice1;
+            
+            let replaceWith1 = "";
+            let replaceWith2 = "";
+            
+            if (matchParen) {
+              const suffix = matchParen[2];
+              // Singularize "pcs"/"items" if new quantity is 1
+              const cleanSuffix1 = (qty1 === 1 && suffix.endsWith('s')) ? suffix.slice(0, -1) : suffix;
+              const cleanSuffix2 = (qty2 === 1 && suffix.endsWith('s')) ? suffix.slice(0, -1) : suffix;
+              replaceWith1 = `(${qty1} ${cleanSuffix1})`;
+              replaceWith2 = `(${qty2} ${cleanSuffix2})`;
+            } else if (matchMult) {
+              replaceWith1 = `x${qty1}`;
+              replaceWith2 = `x${qty2}`;
+            } else if (matchPlain) {
+              const suffix = matchPlain[2];
+              const cleanSuffix1 = (qty1 === 1 && suffix.endsWith('s')) ? suffix.slice(0, -1) : suffix;
+              const cleanSuffix2 = (qty2 === 1 && suffix.endsWith('s')) ? suffix.slice(0, -1) : suffix;
+              replaceWith1 = `${qty1} ${cleanSuffix1}`;
+              replaceWith2 = `${qty2} ${cleanSuffix2}`;
+            }
+            
+            newName1 = originalItem.english.replace(matchedStr, replaceWith1);
+            newName2 = originalItem.english.replace(matchedStr, replaceWith2) + " (Split)";
+          }
+          
+          // Update original item base price & description
+          originalItem.price = halvedPrice1;
+          originalItem.english = newName1;
+          
+          // Create duplicate item with remainder
           const duplicate = {
             japanese: originalItem.japanese + " (Split)",
-            english: originalItem.english + " (Split)",
-            price: halvedPrice,
+            english: newName2,
+            price: halvedPrice2,
             assignedTo: 'shared'
           };
           
