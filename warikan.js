@@ -1137,35 +1137,10 @@ Example JSON structure:
       const data = await response.json();
       
       if (Array.isArray(data)) {
-        // Retrieve local deletion footprints
-        const deletedKeys = JSON.parse(localStorage.getItem('warikanDeletedKeys') || '[]');
-        const resetTime = localStorage.getItem('warikanResetTime');
-        
-        // Filter out any items that have been deleted or cleared locally
-        currentLedger = data.filter(item => {
-          if (!item) return false;
-          
-          // 1. Filter out if the entire ledger was reset prior to this item's creation
-          if (resetTime && item.date) {
-            try {
-              const itemTime = new Date(item.date).getTime();
-              const limitTime = new Date(resetTime).getTime();
-              if (!isNaN(itemTime) && !isNaN(limitTime) && itemTime <= limitTime) {
-                return false;
-              }
-            } catch (err) {
-              console.error("Date parse error in resilience filter:", err);
-            }
-          }
-          
-          // 2. Filter out if this specific item footprint was deleted locally
-          const key = getTransactionKey(item);
-          return !deletedKeys.includes(key);
-        });
-
+        currentLedger = data;
         localStorage.setItem('warikanLedger', JSON.stringify(currentLedger));
         updateMonthSelector(); // Refresh month selector options after cloud sync
-        console.log("Successfully synced ledger from Google Sheets (Resilience Filtered):", currentLedger);
+        console.log("Successfully synced ledger from Google Sheets:", currentLedger);
       }
     } catch (error) {
       console.error("Error fetching ledger from Google Sheets:", error);
@@ -1493,19 +1468,11 @@ Example JSON structure:
       const rId = itemToDelete.receiptId;
       const syncUrl = localStorage.getItem('warikanSyncUrl');
       
-      // 1. Save deleted footprint key locally for resilience filter
-      const itemKey = getTransactionKey(itemToDelete);
-      let deletedKeys = JSON.parse(localStorage.getItem('warikanDeletedKeys') || '[]');
-      if (!deletedKeys.includes(itemKey)) {
-        deletedKeys.push(itemKey);
-        localStorage.setItem('warikanDeletedKeys', JSON.stringify(deletedKeys));
-      }
-
-      // 2. Instantly delete from local state and save to avoid race conditions
+      // 1. Instantly delete from local state and save to avoid race conditions
       currentLedger.splice(index, 1);
       saveLedger();
 
-      // 3. Dispatch background cloud sync deletion
+      // 2. Dispatch background cloud sync deletion
       if (syncUrl) {
         deleteExpenseFromCloud(itemToDelete);
       }
@@ -1533,15 +1500,11 @@ Example JSON structure:
         }
       });
 
-      // 2. Set reset footprint timestamp to ignore historical cloud logs
-      localStorage.setItem('warikanResetTime', new Date().toISOString());
-      localStorage.setItem('warikanDeletedKeys', JSON.stringify([]));
-
-      // 3. Wipes local memory instantly
+      // 2. Wipes local memory instantly
       currentLedger = [];
       saveLedger();
 
-      // 4. Dispatch background cloud sheet clear
+      // 3. Dispatch background cloud sheet clear
       if (syncUrl) {
         clearLedgerFromCloud();
       }
