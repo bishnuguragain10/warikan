@@ -133,6 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const totalIndividual = document.getElementById('total-individual');
   const settlementBanner = document.getElementById('settlement-banner');
 
+  // Month Filter Selector State
+  const ledgerMonthFilter = document.getElementById('ledger-month-filter');
+  let currentMonthFilter = 'all';
+
   // Manual Modal
   const manualModal = document.getElementById('manual-modal');
   const btnManualForm = document.getElementById('btn-manual-form');
@@ -229,6 +233,58 @@ document.addEventListener('DOMContentLoaded', () => {
       receiptPayer.selectedIndex = 0;
     }
   }, 150);
+
+  // --- DYNAMIC MONTH GROUPING & FILTER POPULATION LOGIC ---
+  function updateMonthSelector() {
+    if (!ledgerMonthFilter) return;
+    
+    // 1. Scan dates in currentLedger and gather unique months (formatted like "YYYY-MM")
+    const uniqueMonths = new Set();
+    currentLedger.forEach(item => {
+      if (item.date && item.date.length >= 7) {
+        uniqueMonths.add(item.date.slice(0, 7)); // get YYYY-MM
+      }
+    });
+    
+    // 2. Sort months descending (most recent first)
+    const sortedMonths = Array.from(uniqueMonths).sort().reverse();
+    
+    // 3. Keep track of current selected value to restore it
+    const previousSelection = ledgerMonthFilter.value || 'all';
+    
+    // 4. Reset options
+    ledgerMonthFilter.innerHTML = '<option value="all">📅 Show All Months</option>';
+    
+    // 5. Populate options dynamically
+    sortedMonths.forEach(month => {
+      const [year, monthNum] = month.split('-');
+      const dateObj = new Date(year, parseInt(monthNum) - 1, 1);
+      const monthLabel = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      
+      const option = document.createElement('option');
+      option.value = month;
+      option.innerText = `📅 ${monthLabel}`;
+      ledgerMonthFilter.appendChild(option);
+    });
+    
+    // 6. Restore previous selection if still available, otherwise default to 'all'
+    if (Array.from(ledgerMonthFilter.options).some(opt => opt.value === previousSelection)) {
+      ledgerMonthFilter.value = previousSelection;
+      currentMonthFilter = previousSelection;
+    } else {
+      ledgerMonthFilter.value = 'all';
+      currentMonthFilter = 'all';
+    }
+  }
+
+  // Bind change event to month filter
+  if (ledgerMonthFilter) {
+    ledgerMonthFilter.addEventListener('change', (e) => {
+      currentMonthFilter = e.target.value;
+      calculateSettlement();
+      renderLedgerTable();
+    });
+  }
 
   loadLedger();
 
@@ -1108,6 +1164,7 @@ Example JSON structure:
         });
 
         localStorage.setItem('warikanLedger', JSON.stringify(currentLedger));
+        updateMonthSelector(); // Refresh month selector options after cloud sync
         console.log("Successfully synced ledger from Google Sheets (Resilience Filtered):", currentLedger);
       }
     } catch (error) {
@@ -1214,6 +1271,7 @@ Example JSON structure:
     } else {
       currentLedger = [];
     }
+    updateMonthSelector(); // Populate months dropdown on load
     calculateSettlement();
     renderLedgerTable();
 
@@ -1226,6 +1284,7 @@ Example JSON structure:
 
   function saveLedger() {
     localStorage.setItem('warikanLedger', JSON.stringify(currentLedger));
+    updateMonthSelector(); // Refresh month filter options
     calculateSettlement();
     renderLedgerTable();
   }
@@ -1240,7 +1299,13 @@ Example JSON structure:
     let oweB = 0; // What Bishnu is responsible for
     let oweR = 0; // What Radha is responsible for
 
-    currentLedger.forEach(item => {
+    // Filter items based on selected month dropdown
+    const filteredLedger = currentLedger.filter(item => {
+      if (currentMonthFilter === 'all') return true;
+      return item.date && item.date.startsWith(currentMonthFilter);
+    });
+
+    filteredLedger.forEach(item => {
       const cost = item.cost;
       
       // 1. Calculate Payer totals
@@ -1280,7 +1345,7 @@ Example JSON structure:
 
     settlementBanner.className = 'settlement-banner';
 
-    if (currentLedger.length === 0) {
+    if (filteredLedger.length === 0) {
       settlementBanner.className = 'settlement-banner settlement-even';
       settlementBanner.innerHTML = `
         <div class="settlement-title">Ledger is Empty</div>
@@ -1326,11 +1391,17 @@ Example JSON structure:
   function renderLedgerTable() {
     ledgerBody.innerHTML = '';
 
-    if (currentLedger.length === 0) {
+    // Filter items based on selected month dropdown
+    const filteredLedger = currentLedger.filter(item => {
+      if (currentMonthFilter === 'all') return true;
+      return item.date && item.date.startsWith(currentMonthFilter);
+    });
+
+    if (filteredLedger.length === 0) {
       ledgerBody.innerHTML = `
         <tr>
           <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 40px;">
-            No expenses logged yet. Try loading a mock receipt above!
+            No expenses logged for this month filter.
           </td>
         </tr>
       `;
@@ -1338,7 +1409,7 @@ Example JSON structure:
     }
 
     // Sort descending by date
-    const sorted = [...currentLedger].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const sorted = [...filteredLedger].sort((a, b) => new Date(b.date) - new Date(a.date));
 
     sorted.forEach((item, sortedIndex) => {
       // Find index in main currentLedger array to delete accurately
