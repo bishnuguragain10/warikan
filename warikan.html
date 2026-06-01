@@ -189,7 +189,8 @@
             </div>
             <div class="who-paid-selection">
               <label for="receipt-payer">Who Paid This Bill?</label>
-              <select id="receipt-payer">
+              <select id="receipt-payer" autocomplete="off">
+                <option value="" disabled selected>👤 Select Payer...</option>
                 <option value="Bishnu">👤 Bishnu Paid</option>
                 <option value="Radha">👤 Radha Paid</option>
               </select>
@@ -282,37 +283,43 @@
         <button class="close-modal" id="close-manual-modal">&times;</button>
       </div>
       <form id="manual-form" class="modal-form">
+        <!-- Roommate Custom Split/Rent Info Callout -->
+        <div style="background: rgba(168, 85, 247, 0.05); border: 1px solid rgba(168, 85, 247, 0.15); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; font-size: 11px; color: var(--text-dim); display: flex; align-items: flex-start; gap: 8px; line-height: 1.4;">
+          <span style="font-size:14px; margin-top:1px;">💡</span>
+          <div>
+            <strong style="color: var(--text); display: block; margin-bottom: 2px; font-weight: 600;">Custom Roommate Split & Rent Guide:</strong>
+            For shared bills (like <strong>Rent</strong>), you can contribute different random amounts out-of-pocket. Simply enter exactly what each person paid below. The ledger calculates who owes what dynamically!
+          </div>
+        </div>
+
         <div class="form-row">
           <div class="form-group">
             <label for="manual-date">Date</label>
             <input type="date" id="manual-date" required>
           </div>
           <div class="form-group">
-            <label for="manual-payer">Who Paid?</label>
-            <select id="manual-payer" required>
-              <option value="Bishnu">Bishnu</option>
-              <option value="Radha">Radha</option>
+            <label for="manual-split">Split Assignment</label>
+            <select id="manual-split" required>
+              <option value="shared">👥 Split 50/50 (Shared)</option>
+              <option value="Bishnu">👤 100% Bishnu</option>
+              <option value="Radha">👤 100% Radha</option>
             </select>
           </div>
         </div>
 
         <div class="form-group">
-          <label for="manual-store">Item Description (e.g. Rent, Gas Bill, Cash)</label>
-          <input type="text" id="manual-store" required placeholder="e.g. Electricity Bill, Gyomu Supermarket">
+          <label for="manual-store">Item Description (e.g. Rent, Gas Bill)</label>
+          <input type="text" id="manual-store" required placeholder="e.g. House Rent, Electricity">
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label for="manual-cost">Total Cost (¥)</label>
-            <input type="number" id="manual-cost" min="1" required placeholder="Yen Amount">
+            <label for="manual-paid-b">Bishnu Paid (¥)</label>
+            <input type="number" id="manual-paid-b" min="0" value="0" required placeholder="0">
           </div>
           <div class="form-group">
-            <label for="manual-split">Split Assignment</label>
-            <select id="manual-split" required>
-              <option value="Bishnu">👤 100% Bishnu</option>
-              <option value="Radha">👤 100% Radha</option>
-              <option value="shared">👥 Split 50/50 (Shared)</option>
-            </select>
+            <label for="manual-paid-r">Radha Paid (¥)</label>
+            <input type="number" id="manual-paid-r" min="0" value="0" required placeholder="0">
           </div>
         </div>
 
@@ -323,6 +330,21 @@
     </div>
   </div>
 
-  <script src="warikan.js?v=25"></script>
+  <!-- Premium Receipt Image Lightbox Modal -->
+  <div id="lightbox-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 550px; text-align: center; padding: 20px; background: var(--bg-card); border: 1px solid var(--border); box-shadow: 0 20px 40px rgba(0,0,0,0.5); border-radius: 16px; position: relative;">
+      <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+        <h2 id="lightbox-title" style="font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
+          <span>📷</span> Original Receipt Photo
+        </h2>
+        <button class="close-modal" id="close-lightbox-modal" style="background: none; border: none; font-size: 24px; color: var(--text-muted); cursor: pointer; transition: color 0.2s;">&times;</button>
+      </div>
+      <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 12px; overflow: hidden; display: flex; justify-content: center; align-items: center; max-height: 70vh; border: 1px solid rgba(255,255,255,0.05);">
+        <img id="lightbox-img" src="" alt="Receipt Photo" style="max-width: 100%; max-height: 55vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);">
+      </div>
+    </div>
+  </div>
+
+  <script src="warikan.js?v=30"></script>
 </body>
 </html>

@@ -4,6 +4,72 @@
 let currentLedger = [];
 let currentScannedItems = [];
 let currentTaxMultiplier = 1.0;
+let currentReceiptPhotoBase64 = null; // Temp storage for scanned receipt image
+
+// --- INDEXEDDB HELPER FOR RECEIPT PHOTOS ---
+const DB_NAME = 'WarikanDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'receipt_photos';
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function saveReceiptPhoto(id, base64Data) {
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put({ id: id, photo: base64Data });
+      request.onsuccess = () => resolve(true);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  } catch (err) {
+    console.error("IndexedDB error saving photo:", err);
+  }
+}
+
+async function getReceiptPhoto(id) {
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(id);
+      request.onsuccess = (e) => resolve(e.target.result ? e.target.result.photo : null);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  } catch (err) {
+    console.error("IndexedDB error getting photo:", err);
+    return null;
+  }
+}
+
+async function deleteReceiptPhoto(id) {
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.delete(id);
+      request.onsuccess = () => resolve(true);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  } catch (err) {
+    console.error("IndexedDB error deleting photo:", err);
+  }
+}
 
 // Local Japanese Translation & Assignment Heuristics Map
 const JPN_DICTIONARY = {
@@ -132,6 +198,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- LIGHTBOX RECEIPT PHOTO MODAL LISTENERS ---
+  const lightboxModal = document.getElementById('lightbox-modal');
+  const closeLightboxModal = document.getElementById('close-lightbox-modal');
+
+  if (closeLightboxModal && lightboxModal) {
+    closeLightboxModal.addEventListener('click', () => {
+      lightboxModal.classList.remove('active');
+    });
+    
+    window.addEventListener('click', (e) => {
+      if (e.target === lightboxModal) {
+        lightboxModal.classList.remove('active');
+      }
+    });
+  }
+
+  // Reset receipt payer selection on start to prevent browser autocomplete cache
+  if (receiptPayer) {
+    receiptPayer.value = "";
+    receiptPayer.selectedIndex = 0;
+  }
+
+  // DEFEAT AGGRESSIVE BROWSER AUTOFILL: Password managers and Chrome autofill scripts
+  // execute pre-fill routines a fraction of a second after DOMContentLoaded.
+  // We place a reset call in the macro-task queue to overwrite and force it to empty.
+  setTimeout(() => {
+    if (receiptPayer) {
+      receiptPayer.value = "";
+      receiptPayer.selectedIndex = 0;
+    }
+  }, 150);
+
   loadLedger();
 
   // --- DRAG & DROP FILE LISTENERS ---
@@ -141,6 +239,36 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('⚠️ Please enter your Gemini API key in the sidebar first, then click "Save Key". You only need to do this once!');
       return;
     }
+
+    // 1. Process and compress image for local IndexedDB cache
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1000; // Optimal width for text reading & performance
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Compress as JPEG with 70% quality (retains crystal-clear text but extremely lightweight)
+        currentReceiptPhotoBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        console.log("Compressed receipt image stored (length:", currentReceiptPhotoBase64.length, ")");
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+
+    // 2. Proceed with Gemini OCR
     parseReceiptWithGemini(file, key);
   }
 
@@ -430,7 +558,8 @@ Example JSON structure:
       // Set editor UI state
       receiptStoreName.innerText = parsedData.store || "Scanned Store Bill";
       receiptDateInput.value = parsedData.date || new Date().toISOString().slice(0, 10);
-      receiptPayer.value = "Bishnu";
+      receiptPayer.value = "";
+      receiptPayer.selectedIndex = 0;
       currentScannedItems = parsedData.items;
 
       // Auto-initialize tax selector from AI extraction
@@ -580,7 +709,8 @@ Example JSON structure:
     const scannedDate = extractDateFromText(text);
     receiptDateInput.value = scannedDate;
     
-    receiptPayer.value = "Bishnu";
+    receiptPayer.value = "";
+    receiptPayer.selectedIndex = 0;
     
     renderReceiptEditor();
   }
@@ -607,7 +737,8 @@ Example JSON structure:
         const template = data[index];
         receiptStoreName.innerText = template.store;
         receiptDateInput.value = template.date;
-        receiptPayer.value = template.paidBy;
+        receiptPayer.value = "";
+        receiptPayer.selectedIndex = 0;
         currentScannedItems = template.items;
         
         // Reset tax multiplier to default (no tax added / 1.0)
@@ -717,7 +848,7 @@ Example JSON structure:
   }
 
   // --- SAVE SCANNED ITEMS TO LEDGER ---
-  btnCommitReceipt.addEventListener('click', () => {
+  btnCommitReceipt.addEventListener('click', async () => {
     // Check if there are any unassigned items left
     const unassignedCount = currentScannedItems.filter(i => i.assignedTo === 'unassigned').length;
     if (unassignedCount > 0) {
@@ -726,9 +857,19 @@ Example JSON structure:
     }
 
     const payer = receiptPayer.value;
+    if (!payer) {
+      alert('⚠️ Please select who paid for this bill before saving!');
+      return;
+    }
     const store = receiptStoreName.innerText;
     const selectedDate = receiptDateInput.value || new Date().toISOString().slice(0, 10);
     const syncUrl = localStorage.getItem('warikanSyncUrl');
+
+    // 1. Generate unique receipt ID and write photo to local IndexedDB
+    const receiptId = currentReceiptPhotoBase64 ? 'rcpt_' + Date.now() : '';
+    if (receiptId && currentReceiptPhotoBase64) {
+      await saveReceiptPhoto(receiptId, currentReceiptPhotoBase64);
+    }
 
     if (syncUrl) {
       // Show loading overlay
@@ -742,7 +883,8 @@ Example JSON structure:
           store: `${store} - ${item.english} (${item.japanese})`,
           paidBy: payer,
           cost: Math.round(item.price * currentTaxMultiplier),
-          assignedTo: item.assignedTo
+          assignedTo: item.assignedTo,
+          receiptId: receiptId // Save receipt ID association in Google Sheets
         };
         return fetch(syncUrl, {
           method: 'POST',
@@ -766,7 +908,8 @@ Example JSON structure:
             store: `${store} - ${item.english} (${item.japanese})`,
             paidBy: payer,
             cost: Math.round(item.price * currentTaxMultiplier),
-            assignedTo: item.assignedTo
+            assignedTo: item.assignedTo,
+            receiptId: receiptId
           });
         });
         saveLedger();
@@ -779,21 +922,24 @@ Example JSON structure:
           store: `${store} - ${item.english} (${item.japanese})`,
           paidBy: payer,
           cost: Math.round(item.price * currentTaxMultiplier),
-          assignedTo: item.assignedTo
+          assignedTo: item.assignedTo,
+          receiptId: receiptId
         });
       });
       saveLedger();
-      alert('All receipt items successfully itemized and committed to your monthly ledger!');
+      alert('All receipt items successfully itemized and committed to your ledger!');
     }
 
     sectionReceiptEditor.style.display = 'none';
     currentScannedItems = [];
+    currentReceiptPhotoBase64 = null; // Clear image buffer
   });
 
   btnCancelReceipt.addEventListener('click', () => {
     if (confirm('Cancel scan? Scanned lines will be lost.')) {
       sectionReceiptEditor.style.display = 'none';
       currentScannedItems = [];
+      currentReceiptPhotoBase64 = null; // Clear image buffer
     }
   });
 
@@ -876,15 +1022,27 @@ Example JSON structure:
     e.preventDefault();
 
     const date = document.getElementById('manual-date').value;
-    const payer = document.getElementById('manual-payer').value;
+    const paidB = parseInt(document.getElementById('manual-paid-b').value) || 0;
+    const paidR = parseInt(document.getElementById('manual-paid-r').value) || 0;
     const desc = document.getElementById('manual-store').value.trim();
-    const cost = parseInt(document.getElementById('manual-cost').value);
+    const cost = paidB + paidR;
     const split = document.getElementById('manual-split').value;
+    
+    if (cost === 0) {
+      alert("Total paid cannot be 0.");
+      return;
+    }
+
+    let payer = 'Custom';
+    if (paidB > 0 && paidR === 0) payer = 'Bishnu';
+    if (paidR > 0 && paidB === 0) payer = 'Radha';
 
     const newItem = {
       date: date,
       store: desc,
       paidBy: payer,
+      paidB: paidB,
+      paidR: paidR,
       cost: cost,
       assignedTo: split
     };
@@ -900,6 +1058,11 @@ Example JSON structure:
     manualForm.reset();
     manualModal.classList.remove('active');
   });
+
+  // Helper to generate a unique footprint for transactions to enable resilient filtering
+  function getTransactionKey(item) {
+    return `${item.date}_${item.store}_${item.cost}_${item.paidBy}`;
+  }
 
   // --- CLOUD SYNCING FUNCTIONS (Google Sheets database) ---
   async function fetchLedgerFromCloud() {
@@ -918,9 +1081,34 @@ Example JSON structure:
       const data = await response.json();
       
       if (Array.isArray(data)) {
-        currentLedger = data;
+        // Retrieve local deletion footprints
+        const deletedKeys = JSON.parse(localStorage.getItem('warikanDeletedKeys') || '[]');
+        const resetTime = localStorage.getItem('warikanResetTime');
+        
+        // Filter out any items that have been deleted or cleared locally
+        currentLedger = data.filter(item => {
+          if (!item) return false;
+          
+          // 1. Filter out if the entire ledger was reset prior to this item's creation
+          if (resetTime && item.date) {
+            try {
+              const itemTime = new Date(item.date).getTime();
+              const limitTime = new Date(resetTime).getTime();
+              if (!isNaN(itemTime) && !isNaN(limitTime) && itemTime <= limitTime) {
+                return false;
+              }
+            } catch (err) {
+              console.error("Date parse error in resilience filter:", err);
+            }
+          }
+          
+          // 2. Filter out if this specific item footprint was deleted locally
+          const key = getTransactionKey(item);
+          return !deletedKeys.includes(key);
+        });
+
         localStorage.setItem('warikanLedger', JSON.stringify(currentLedger));
-        console.log("Successfully synced ledger from Google Sheets:", currentLedger);
+        console.log("Successfully synced ledger from Google Sheets (Resilience Filtered):", currentLedger);
       }
     } catch (error) {
       console.error("Error fetching ledger from Google Sheets:", error);
@@ -952,6 +1140,69 @@ Example JSON structure:
       // Fail-safe: Save locally
       currentLedger.push(item);
       saveLedger();
+    }
+  }
+
+  async function deleteExpenseFromCloud(item) {
+    const syncUrl = localStorage.getItem('warikanSyncUrl');
+    if (!syncUrl) return;
+
+    settlementBanner.innerHTML = `
+      <div class="settlement-loader">
+        <div class="spinner" style="width:14px; height:16px;"></div>
+        <span>Deleting from Cloud Sheet...</span>
+      </div>
+    `;
+
+    try {
+      await fetch(syncUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'delete',
+          item: item
+        })
+      });
+      console.log("Delete request posted to cloud for item:", item);
+    } catch (error) {
+      console.error("Error deleting expense from cloud:", error);
+    } finally {
+      calculateSettlement();
+      renderLedgerTable();
+    }
+  }
+
+  async function clearLedgerFromCloud() {
+    const syncUrl = localStorage.getItem('warikanSyncUrl');
+    if (!syncUrl) return;
+
+    settlementBanner.innerHTML = `
+      <div class="settlement-loader">
+        <div class="spinner" style="width:14px; height:16px;"></div>
+        <span>Clearing Cloud Sheet...</span>
+      </div>
+    `;
+
+    try {
+      await fetch(syncUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'clear'
+        })
+      });
+      console.log("Clear request posted to cloud");
+    } catch (error) {
+      console.error("Error clearing ledger from cloud:", error);
+    } finally {
+      calculateSettlement();
+      renderLedgerTable();
     }
   }
 
@@ -995,8 +1246,11 @@ Example JSON structure:
       // 1. Calculate Payer totals
       if (item.paidBy === 'Bishnu') {
         paidB += cost;
-      } else {
+      } else if (item.paidBy === 'Radha') {
         paidR += cost;
+      } else if (item.paidBy === 'Custom') {
+        paidB += (item.paidB || 0);
+        paidR += (item.paidR || 0);
       }
 
       // 2. Calculate Split responsibilities
@@ -1110,9 +1364,18 @@ Example JSON structure:
 
       tr.innerHTML = `
         <td style="color: var(--text-muted); font-size:12px;">${item.date}</td>
-        <td style="font-weight: 500;">${escapeHTML(item.store)}</td>
+        <td style="font-weight: 500;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>${escapeHTML(item.store)}</span>
+            ${item.receiptId ? `
+              <button class="btn-view-receipt" data-receipt-id="${item.receiptId}" title="View original receipt photo" style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight:600; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: all 0.2s;">
+                <span>📷</span> View
+              </button>
+            ` : ''}
+          </div>
+        </td>
         <td style="text-align: center;">
-          <span class="avatar ${item.paidBy === 'Bishnu' ? 'avatar-b' : 'avatar-r'}">${item.paidBy[0]}</span>
+          ${item.paidBy === 'Custom' ? '<span class="avatar avatar-s" title="Split Contribution">👥</span>' : `<span class="avatar ${item.paidBy === 'Bishnu' ? 'avatar-b' : 'avatar-r'}">${item.paidBy[0]}</span>`}
         </td>
         <td style="text-align: right; font-weight:700;">¥${item.cost.toLocaleString()}</td>
         <td style="text-align: center;">
@@ -1132,23 +1395,85 @@ Example JSON structure:
         deleteLedgerItem(idx);
       });
 
+      // Bind View Receipt Action
+      const btnView = tr.querySelector('.btn-view-receipt');
+      if (btnView) {
+        btnView.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const rId = e.currentTarget.getAttribute('data-receipt-id');
+          const photoBase64 = await getReceiptPhoto(rId);
+          if (photoBase64) {
+            document.getElementById('lightbox-img').src = photoBase64;
+            document.getElementById('lightbox-modal').classList.add('active');
+          } else {
+            alert("⚠️ Receipt photo could not be found locally in this browser's cache.");
+          }
+        });
+      }
+
       ledgerBody.appendChild(tr);
     });
   }
 
   // --- DELETE TRANSACTION ACTION ---
-  function deleteLedgerItem(index) {
+  async function deleteLedgerItem(index) {
     if (confirm('Delete this expense?')) {
+      const itemToDelete = currentLedger[index];
+      const rId = itemToDelete.receiptId;
+      const syncUrl = localStorage.getItem('warikanSyncUrl');
+      
+      // 1. Save deleted footprint key locally for resilience filter
+      const itemKey = getTransactionKey(itemToDelete);
+      let deletedKeys = JSON.parse(localStorage.getItem('warikanDeletedKeys') || '[]');
+      if (!deletedKeys.includes(itemKey)) {
+        deletedKeys.push(itemKey);
+        localStorage.setItem('warikanDeletedKeys', JSON.stringify(deletedKeys));
+      }
+
+      // 2. Instantly delete from local state and save to avoid race conditions
       currentLedger.splice(index, 1);
       saveLedger();
+
+      // 3. Dispatch background cloud sync deletion
+      if (syncUrl) {
+        deleteExpenseFromCloud(itemToDelete);
+      }
+
+      // Garbage collect / clean up unused receipt photo from local storage
+      if (rId) {
+        const stillReferenced = currentLedger.some(item => item.receiptId === rId);
+        if (!stillReferenced) {
+          await deleteReceiptPhoto(rId);
+          console.log("Cleaned up orphaned receipt photo from IndexedDB:", rId);
+        }
+      }
     }
   }
 
   // --- RESET ALL LEDGER DATA ---
-  btnClearLedger.addEventListener('click', () => {
+  btnClearLedger.addEventListener('click', async () => {
     if (confirm('Are you absolutely sure you want to reset this month\'s ledger? All records will be wiped.')) {
+      const syncUrl = localStorage.getItem('warikanSyncUrl');
+      
+      // 1. Wipe all local IndexedDB photo binaries
+      currentLedger.forEach(async (item) => {
+        if (item.receiptId) {
+          await deleteReceiptPhoto(item.receiptId);
+        }
+      });
+
+      // 2. Set reset footprint timestamp to ignore historical cloud logs
+      localStorage.setItem('warikanResetTime', new Date().toISOString());
+      localStorage.setItem('warikanDeletedKeys', JSON.stringify([]));
+
+      // 3. Wipes local memory instantly
       currentLedger = [];
       saveLedger();
+
+      // 4. Dispatch background cloud sheet clear
+      if (syncUrl) {
+        clearLedgerFromCloud();
+      }
     }
   });
 
