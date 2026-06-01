@@ -860,6 +860,11 @@ Example JSON structure:
             <button class="segment-btn ${item.assignedTo === 'shared' ? 'active' : ''}" data-index="${index}" data-split="shared">👥 Shared</button>
           </div>
         </td>
+        <td style="text-align: center;">
+          <button class="btn-split-row" data-index="${index}" title="Split item price 50/50" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); color: #c084fc; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight:600; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: all 0.2s; outline: none;">
+            ✂️ Split
+          </button>
+        </td>
       `;
 
       // Segment click choices
@@ -881,6 +886,33 @@ Example JSON structure:
           }
         });
       });
+
+      // Split button listener
+      const btnSplit = tr.querySelector('.btn-split-row');
+      if (btnSplit) {
+        btnSplit.addEventListener('click', (e) => {
+          const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+          const originalItem = currentScannedItems[idx];
+          
+          // Halve the original item's base price
+          const halvedPrice = originalItem.price / 2;
+          originalItem.price = halvedPrice;
+          
+          // Create duplicate item with halved price
+          const duplicate = {
+            japanese: originalItem.japanese + " (Split)",
+            english: originalItem.english + " (Split)",
+            price: halvedPrice,
+            assignedTo: 'shared'
+          };
+          
+          // Insert duplicate right below the original item in the scanned items array
+          currentScannedItems.splice(idx + 1, 0, duplicate);
+          
+          // Re-render editor
+          renderReceiptEditor();
+        });
+      }
 
       // English inputs change hook
       tr.querySelector('.edit-english').addEventListener('change', (e) => {
@@ -1362,6 +1394,33 @@ Example JSON structure:
     }
   }
 
+  // --- DELETE ENTIRE RECEIPT (All matching items) ---
+  async function deleteLedgerReceipt(receiptId) {
+    if (confirm('Delete this entire receipt and all its items?')) {
+      const syncUrl = localStorage.getItem('warikanSyncUrl');
+      
+      // 1. Gather all items to delete in background
+      const itemsToDelete = currentLedger.filter(item => item.receiptId === receiptId);
+      
+      // 2. Local filter-out and save instantly to prevent race conditions
+      currentLedger = currentLedger.filter(item => item.receiptId !== receiptId);
+      saveLedger();
+      
+      // 3. Dispatch background cloud sync deletions in parallel
+      if (syncUrl) {
+        itemsToDelete.forEach(item => {
+          deleteExpenseFromCloud(item);
+        });
+      }
+      
+      // Clean up receipt photo binary
+      if (receiptId) {
+        await deleteReceiptPhoto(receiptId);
+        console.log("Cleaned up receipt photo from IndexedDB for deleted receipt:", receiptId);
+      }
+    }
+  }
+
   // --- RENDER DYNAMIC HISTORICAL LEDGER TABLE ---
   function renderLedgerTable() {
     ledgerBody.innerHTML = '';
@@ -1386,78 +1445,273 @@ Example JSON structure:
     // Sort descending by date
     const sorted = [...filteredLedger].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    sorted.forEach((item, sortedIndex) => {
-      // Find index in main currentLedger array to delete accurately
+    // Group items by receiptId
+    const groups = [];
+    const groupMap = new Map();
+
+    sorted.forEach(item => {
       const mainIndex = currentLedger.findIndex(x => x === item);
-      const tr = document.createElement('tr');
-
-      let splitText = 'Shared';
-      let badgeClass = 'ledger-badge-s';
-      let bShare = item.cost / 2;
-      let rShare = item.cost / 2;
-
-      if (item.assignedTo === 'Bishnu') {
-        splitText = 'Bishnu (100%)';
-        badgeClass = 'ledger-badge-b';
-        bShare = item.cost;
-        rShare = 0;
-      } else if (item.assignedTo === 'Radha') {
-        splitText = 'Radha (100%)';
-        badgeClass = 'ledger-badge-r';
-        bShare = 0;
-        rShare = item.cost;
-      }
-
-      tr.innerHTML = `
-        <td style="color: var(--text-muted); font-size:12px;">${item.date}</td>
-        <td style="font-weight: 500;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span>${escapeHTML(item.store)}</span>
-            ${item.receiptId ? `
-              <button class="btn-view-receipt" data-receipt-id="${item.receiptId}" title="View original receipt photo" style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight:600; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: all 0.2s;">
-                <span>📷</span> View
-              </button>
-            ` : ''}
-          </div>
-        </td>
-        <td style="text-align: center;">
-          ${item.paidBy === 'Custom' ? '<span class="avatar avatar-s" title="Split Contribution">👥</span>' : `<span class="avatar ${item.paidBy === 'Bishnu' ? 'avatar-b' : 'avatar-r'}">${item.paidBy[0]}</span>`}
-        </td>
-        <td style="text-align: right; font-weight:700;">¥${item.cost.toLocaleString()}</td>
-        <td style="text-align: center;">
-          <span class="ledger-badge ${badgeClass}">${splitText}</span>
-        </td>
-        <td style="text-align: right; color:#818cf8;">¥${Math.round(bShare).toLocaleString()}</td>
-        <td style="text-align: right; color:#f472b6;">¥${Math.round(rShare).toLocaleString()}</td>
-        <td style="text-align: center;">
-          <button class="btn-trash" data-index="${mainIndex}" title="Delete expense">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
-        </td>
-      `;
-
-      tr.querySelector('.btn-trash').addEventListener('click', (e) => {
-        const idx = parseInt(e.currentTarget.getAttribute('data-index'));
-        deleteLedgerItem(idx);
-      });
-
-      // Bind View Receipt Action
-      const btnView = tr.querySelector('.btn-view-receipt');
-      if (btnView) {
-        btnView.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const rId = e.currentTarget.getAttribute('data-receipt-id');
-          const photoBase64 = await getReceiptPhoto(rId);
-          if (photoBase64) {
-            document.getElementById('lightbox-img').src = photoBase64;
-            document.getElementById('lightbox-modal').classList.add('active');
-          } else {
-            alert("⚠️ Receipt photo could not be found locally in this browser's cache.");
-          }
+      
+      if (item.receiptId) {
+        if (!groupMap.has(item.receiptId)) {
+          const g = {
+            receiptId: item.receiptId,
+            date: item.date,
+            store: item.store.split(' - ')[0] || item.store,
+            paidBy: item.paidBy,
+            cost: 0,
+            items: []
+          };
+          groups.push(g);
+          groupMap.set(item.receiptId, g);
+        }
+        const g = groupMap.get(item.receiptId);
+        g.cost += item.cost;
+        g.items.push({ item, mainIndex });
+      } else {
+        // Independent item
+        groups.push({
+          receiptId: '',
+          date: item.date,
+          store: item.store,
+          paidBy: item.paidBy,
+          cost: item.cost,
+          items: [{ item, mainIndex }]
         });
       }
+    });
 
-      ledgerBody.appendChild(tr);
+    groups.forEach(g => {
+      if (g.receiptId) {
+        // Render Group Parent Row
+        let receiptBShare = 0;
+        let receiptRShare = 0;
+        const receiptAssignments = new Set();
+        
+        g.items.forEach(child => {
+          let bShare = child.item.cost / 2;
+          let rShare = child.item.cost / 2;
+          if (child.item.assignedTo === 'Bishnu') {
+            bShare = child.item.cost;
+            rShare = 0;
+          } else if (child.item.assignedTo === 'Radha') {
+            bShare = 0;
+            rShare = child.item.cost;
+          }
+          receiptBShare += bShare;
+          receiptRShare += rShare;
+          receiptAssignments.add(child.item.assignedTo || 'shared');
+        });
+
+        let groupSplitText = 'Shared';
+        let groupBadgeClass = 'ledger-badge-s';
+        
+        if (receiptAssignments.size > 1) {
+          groupSplitText = 'Mixed Split';
+          groupBadgeClass = 'ledger-badge-mixed';
+        } else if (receiptAssignments.has('Bishnu')) {
+          groupSplitText = 'Bishnu (100%)';
+          groupBadgeClass = 'ledger-badge-b';
+        } else if (receiptAssignments.has('Radha')) {
+          groupSplitText = 'Radha (100%)';
+          groupBadgeClass = 'ledger-badge-r';
+        }
+
+        const parentTr = document.createElement('tr');
+        parentTr.className = 'parent-row';
+        parentTr.setAttribute('data-receipt-id', g.receiptId);
+
+        parentTr.innerHTML = `
+          <td style="color: var(--text-muted); font-size:12px;">${g.date}</td>
+          <td style="font-weight: 600;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="accordion-toggle" id="toggle-${g.receiptId}">▶</span>
+              <span>${escapeHTML(g.store)} <span style="font-size:10px; font-weight:600; color:var(--text-dim); background:rgba(255,255,255,0.04); border:1px solid var(--border); padding:1px 5px; border-radius:4px; margin-left:4px;">${g.items.length} items</span></span>
+              ${g.receiptId ? `
+                <button class="btn-view-receipt" data-receipt-id="${g.receiptId}" title="View original receipt photo" style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight:600; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: all 0.2s;">
+                  <span>📷</span> View
+                </button>
+              ` : ''}
+            </div>
+          </td>
+          <td style="text-align: center;">
+            ${g.paidBy === 'Custom' ? '<span class="avatar avatar-s" title="Split Contribution">👥</span>' : `<span class="avatar ${g.paidBy === 'Bishnu' ? 'avatar-b' : 'avatar-r'}">${g.paidBy[0]}</span>`}
+          </td>
+          <td style="text-align: right; font-weight:700;">¥${g.cost.toLocaleString()}</td>
+          <td style="text-align: center;">
+            <span class="ledger-badge ${groupBadgeClass}">${groupSplitText}</span>
+          </td>
+          <td style="text-align: right; color:#818cf8; font-weight:600;">¥${Math.round(receiptBShare).toLocaleString()}</td>
+          <td style="text-align: right; color:#f472b6; font-weight:600;">¥${Math.round(receiptRShare).toLocaleString()}</td>
+          <td style="text-align: center;">
+            <button class="btn-trash btn-trash-parent" data-receipt-id="${g.receiptId}" title="Delete entire receipt">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </td>
+        `;
+
+        parentTr.querySelector('.btn-trash-parent').addEventListener('click', (e) => {
+          e.stopPropagation();
+          const rId = e.currentTarget.getAttribute('data-receipt-id');
+          deleteLedgerReceipt(rId);
+        });
+
+        // Bind View Receipt Action on Parent Row
+        const btnView = parentTr.querySelector('.btn-view-receipt');
+        if (btnView) {
+          btnView.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const rId = e.currentTarget.getAttribute('data-receipt-id');
+            const photoBase64 = await getReceiptPhoto(rId);
+            if (photoBase64) {
+              document.getElementById('lightbox-img').src = photoBase64;
+              document.getElementById('lightbox-modal').classList.add('active');
+            } else {
+              alert("⚠️ Receipt photo could not be found locally in this browser's cache.");
+            }
+          });
+        }
+
+        // Accordion slide listener
+        parentTr.addEventListener('click', (e) => {
+          if (e.target.closest('.btn-trash-parent') || e.target.closest('.btn-view-receipt')) {
+            return;
+          }
+          const toggleSpan = parentTr.querySelector(`#toggle-${g.receiptId}`);
+          const isExpanded = toggleSpan.classList.contains('expanded');
+          const childRows = ledgerBody.querySelectorAll(`.child-of-${g.receiptId}`);
+          
+          childRows.forEach(row => {
+            if (isExpanded) {
+              row.classList.add('hidden');
+            } else {
+              row.classList.remove('hidden');
+            }
+          });
+
+          if (isExpanded) {
+            toggleSpan.classList.remove('expanded');
+            toggleSpan.innerText = '▶';
+          } else {
+            toggleSpan.classList.add('expanded');
+            toggleSpan.innerText = '▼';
+          }
+        });
+
+        ledgerBody.appendChild(parentTr);
+
+        // Render Child Rows for Group
+        g.items.forEach(child => {
+          const item = child.item;
+          const mainIndex = child.mainIndex;
+          
+          let splitText = 'Shared';
+          let badgeClass = 'ledger-badge-s';
+          let bShare = item.cost / 2;
+          let rShare = item.cost / 2;
+
+          if (item.assignedTo === 'Bishnu') {
+            splitText = 'Bishnu (100%)';
+            badgeClass = 'ledger-badge-b';
+            bShare = item.cost;
+            rShare = 0;
+          } else if (item.assignedTo === 'Radha') {
+            splitText = 'Radha (100%)';
+            badgeClass = 'ledger-badge-r';
+            bShare = 0;
+            rShare = item.cost;
+          }
+
+          const childTr = document.createElement('tr');
+          childTr.className = `child-row child-of-${g.receiptId} hidden`;
+          
+          let cleanDesc = item.store;
+          if (item.store.includes(' - ')) {
+            cleanDesc = item.store.split(' - ').slice(1).join(' - ');
+          }
+
+          childTr.innerHTML = `
+            <td style="color: var(--text-muted); font-size:12px; text-align: right;"></td>
+            <td class="child-row-title">
+              <span>${escapeHTML(cleanDesc)}</span>
+            </td>
+            <td style="text-align: center; color: var(--text-dim); font-size: 11px;">
+              -
+            </td>
+            <td style="text-align: right; font-weight:500; color: var(--text-muted);">¥${item.cost.toLocaleString()}</td>
+            <td style="text-align: center;">
+              <span class="ledger-badge ${badgeClass}">${splitText}</span>
+            </td>
+            <td style="text-align: right; color:#818cf8; font-size: 13px;">¥${Math.round(bShare).toLocaleString()}</td>
+            <td style="text-align: right; color:#f472b6; font-size: 13px;">¥${Math.round(rShare).toLocaleString()}</td>
+            <td style="text-align: center;">
+              <button class="btn-trash btn-trash-child" data-index="${mainIndex}" title="Delete this item only">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </td>
+          `;
+
+          childTr.querySelector('.btn-trash-child').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+            deleteLedgerItem(idx);
+          });
+
+          ledgerBody.appendChild(childTr);
+        });
+
+      } else {
+        // Flat independent item (standard row)
+        const child = g.items[0];
+        const item = child.item;
+        const mainIndex = child.mainIndex;
+        
+        let splitText = 'Shared';
+        let badgeClass = 'ledger-badge-s';
+        let bShare = item.cost / 2;
+        let rShare = item.cost / 2;
+
+        if (item.assignedTo === 'Bishnu') {
+          splitText = 'Bishnu (100%)';
+          badgeClass = 'ledger-badge-b';
+          bShare = item.cost;
+          rShare = 0;
+        } else if (item.assignedTo === 'Radha') {
+          splitText = 'Radha (100%)';
+          badgeClass = 'ledger-badge-r';
+          bShare = 0;
+          rShare = item.cost;
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="color: var(--text-muted); font-size:12px;">${item.date}</td>
+          <td style="font-weight: 500;">
+            <span>${escapeHTML(item.store)}</span>
+          </td>
+          <td style="text-align: center;">
+            ${item.paidBy === 'Custom' ? '<span class="avatar avatar-s" title="Split Contribution">👥</span>' : `<span class="avatar ${item.paidBy === 'Bishnu' ? 'avatar-b' : 'avatar-r'}">${item.paidBy[0]}</span>`}
+          </td>
+          <td style="text-align: right; font-weight:700;">¥${item.cost.toLocaleString()}</td>
+          <td style="text-align: center;">
+            <span class="ledger-badge ${badgeClass}">${splitText}</span>
+          </td>
+          <td style="text-align: right; color:#818cf8;">¥${Math.round(bShare).toLocaleString()}</td>
+          <td style="text-align: right; color:#f472b6;">¥${Math.round(rShare).toLocaleString()}</td>
+          <td style="text-align: center;">
+            <button class="btn-trash btn-trash-single" data-index="${mainIndex}" title="Delete expense">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </td>
+        `;
+
+        tr.querySelector('.btn-trash-single').addEventListener('click', (e) => {
+          const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+          deleteLedgerItem(idx);
+        });
+
+        ledgerBody.appendChild(tr);
+      }
     });
   }
 
