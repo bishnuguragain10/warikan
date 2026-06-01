@@ -106,6 +106,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Elements
   const dropZone = document.getElementById('drop-zone');
   const fileInput = document.getElementById('file-input');
+
+  const uploadPrompt = document.getElementById('upload-prompt');
+  const uploadPreviewContainer = document.getElementById('upload-preview-container');
+  const uploadPreviewImg = document.getElementById('upload-preview-img');
+
+  function updateReceiptPreview() {
+    if (!uploadPrompt || !uploadPreviewContainer || !uploadPreviewImg) return;
+    if (currentReceiptPhotoBase64) {
+      uploadPreviewImg.src = currentReceiptPhotoBase64;
+      uploadPrompt.style.display = 'none';
+      uploadPreviewContainer.style.display = 'flex';
+    } else {
+      uploadPreviewImg.src = '';
+      uploadPrompt.style.display = 'flex';
+      uploadPreviewContainer.style.display = 'none';
+    }
+  }
   const ocrLoader = document.getElementById('ocr-loader');
   const ocrProgress = document.getElementById('ocr-progress');
   
@@ -332,6 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Compress as JPEG with 70% quality (retains crystal-clear text but extremely lightweight)
         currentReceiptPhotoBase64 = canvas.toDataURL('image/jpeg', 0.7);
         console.log("Compressed receipt image stored (length:", currentReceiptPhotoBase64.length, ")");
+        updateReceiptPreview();
       };
       img.src = event.target.result;
     };
@@ -847,6 +865,7 @@ Example JSON structure:
 
     receiptItemsBody.innerHTML = '';
     sectionReceiptEditor.style.display = 'block';
+    updateReceiptPreview();
     
     if (shouldScroll) {
       // Scroll down to editor smoothly
@@ -1148,6 +1167,7 @@ Example JSON structure:
     sectionReceiptEditor.style.display = 'none';
     currentScannedItems = [];
     currentReceiptPhotoBase64 = null; // Clear image buffer
+    updateReceiptPreview();
   });
 
   btnCancelReceipt.addEventListener('click', () => {
@@ -1156,6 +1176,7 @@ Example JSON structure:
       sectionReceiptEditor.style.display = 'none';
       currentScannedItems = [];
       currentReceiptPhotoBase64 = null; // Clear image buffer
+      updateReceiptPreview();
     }
   });
 
@@ -1450,6 +1471,7 @@ Example JSON structure:
       const tempPhoto = await getReceiptPhoto('temp_scanned_photo');
       if (tempPhoto) {
         currentReceiptPhotoBase64 = tempPhoto;
+        updateReceiptPreview();
       }
       
       // Update tax segment selector states

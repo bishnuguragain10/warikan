@@ -160,10 +160,20 @@
         
         <div class="scanner-grid">
           <!-- Image Drop Uploader -->
-          <div class="card upload-box" id="drop-zone">
-            <svg class="upload-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-            <h3>Upload Japanese Receipt</h3>
-            <p>Drag & drop or click to upload receipt image (JPEG, PNG)</p>
+          <div class="card upload-box" id="drop-zone" style="min-height: 220px;">
+            <div id="upload-prompt" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+              <svg class="upload-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              <h3>Upload Japanese Receipt</h3>
+              <p>Drag & drop or click to upload receipt image (JPEG, PNG)</p>
+            </div>
+            
+            <div id="upload-preview-container" style="display: none; position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; gap: 12px; flex-direction: column; animation: dropdownSlideIn 0.3s ease;">
+              <img id="upload-preview-img" src="" alt="Receipt Preview" style="max-height: 160px; max-width: 100%; object-fit: contain; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.2s ease;">
+              <span style="font-size: 11px; color: #c084fc; font-weight: 600; background: rgba(168, 85, 247, 0.08); padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(168, 85, 247, 0.2); cursor: pointer; user-select: none;">
+                📷 Scanned Receipt Preview (Click to change photo)
+              </span>
+            </div>
+
             <input type="file" id="file-input" accept="image/*" style="display: none;">
             
             <div class="loader-overlay" id="ocr-loader" style="display: none;">
