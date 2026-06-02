@@ -168,7 +168,7 @@ function doPost(e) {
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
         
         const fileId = file.getId();
-        const photoLink = "https://docs.google.com/uc?export=download&id=" + fileId;
+        const photoLink = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1600";
         Logger.log("File uploaded to Drive successfully. Link: " + photoLink);
         
         // Find all rows matching the old local receiptId and update Column 7
@@ -214,7 +214,7 @@ function doPost(e) {
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
         
         const fileId = file.getId();
-        photoLink = "https://docs.google.com/uc?export=download&id=" + fileId;
+        photoLink = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1600";
       } catch (err) {
         Logger.log("Google Drive photo upload failed: " + err.toString());
       }

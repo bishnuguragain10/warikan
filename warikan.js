@@ -1830,6 +1830,7 @@ Example JSON structure:
           groupBadgeClass = 'ledger-badge-r';
         }
 
+        const safeId = g.receiptId ? g.receiptId.replace(/[^a-zA-Z0-9_-]/g, '_') : '';
         const parentTr = document.createElement('tr');
         parentTr.className = 'parent-row';
         parentTr.setAttribute('data-receipt-id', g.receiptId);
@@ -1838,7 +1839,7 @@ Example JSON structure:
           <td style="color: var(--text-muted); font-size:12px;">${g.date}</td>
           <td style="font-weight: 600;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="accordion-toggle" id="toggle-${g.receiptId}">▶</span>
+              <span class="accordion-toggle" id="toggle-${safeId}">▶</span>
               <span>${escapeHTML(g.store)} <span style="font-size:10px; font-weight:600; color:var(--text-dim); background:rgba(255,255,255,0.04); border:1px solid var(--border); padding:1px 5px; border-radius:4px; margin-left:4px;">${g.items.length} items</span></span>
               ${g.receiptId ? `
                 <button class="btn-view-receipt" data-receipt-id="${g.receiptId}" title="View original receipt photo" style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight:600; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; transition: all 0.2s;">
@@ -1876,7 +1877,7 @@ Example JSON structure:
             e.stopPropagation();
             const rId = e.currentTarget.getAttribute('data-receipt-id');
             if (rId && (rId.startsWith('http://') || rId.startsWith('https://'))) {
-              document.getElementById('lightbox-img').src = rId;
+              document.getElementById('lightbox-img').src = getDirectDriveImgUrl(rId);
               document.getElementById('lightbox-modal').classList.add('active');
             } else {
               const photoBase64 = await getReceiptPhoto(rId);
@@ -1895,9 +1896,9 @@ Example JSON structure:
           if (e.target.closest('.btn-trash-parent') || e.target.closest('.btn-view-receipt')) {
             return;
           }
-          const toggleSpan = parentTr.querySelector(`#toggle-${g.receiptId}`);
+          const toggleSpan = parentTr.querySelector(`#toggle-${safeId}`);
           const isExpanded = toggleSpan.classList.contains('expanded');
-          const childRows = ledgerBody.querySelectorAll(`.child-of-${g.receiptId}`);
+          const childRows = ledgerBody.querySelectorAll(`.child-of-${safeId}`);
           
           childRows.forEach(row => {
             if (isExpanded) {
@@ -1941,7 +1942,7 @@ Example JSON structure:
           }
 
           const childTr = document.createElement('tr');
-          childTr.className = `child-row child-of-${g.receiptId} hidden`;
+          childTr.className = `child-row child-of-${safeId} hidden`;
           
           let cleanDesc = item.store;
           if (item.store.includes(' - ')) {
@@ -2131,5 +2132,17 @@ Example JSON structure:
         '"': '&quot;'
       }[tag] || tag)
     );
+  }
+
+  // Helper to safely convert Google Drive download links into thumbnail URLs that render perfectly in <img> tags
+  function getDirectDriveImgUrl(url) {
+    if (!url || !url.startsWith('http')) return url;
+    if (url.includes('docs.google.com/uc') || url.includes('drive.google.com/uc')) {
+      const match = url.match(/[?&]id=([^&#]+)/);
+      if (match && match[1]) {
+        return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1600`;
+      }
+    }
+    return url;
   }
 });
