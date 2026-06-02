@@ -5,7 +5,9 @@
 function doGet(e) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    const rows = sheet.getDataRange().getValues();
+    const range = sheet.getDataRange();
+    const rows = range.getValues();
+    const formulas = range.getFormulas();
     
     // If empty or only headers
     if (rows.length <= 1) {
@@ -15,11 +17,12 @@ function doGet(e) {
     const platforms = [];
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
+      const formula = formulas[i] ? formulas[i][3] : "";
       
-      // Parse formula URL if present
+      // Parse formula URL if present (extracts URL from =HYPERLINK("url", "text"))
       let url = String(row[3]);
-      if (url.includes("HYPERLINK")) {
-        const match = url.match(/"([^"]+)"/);
+      if (formula && formula.includes("HYPERLINK")) {
+        const match = formula.match(/"([^"]+)"/);
         if (match && match[1]) {
           url = match[1];
         }
