@@ -1,6 +1,39 @@
 // dashboard.js
 // Handles list rendering, category filtering, search, modal control, manual additions, and CSV export
 
+// --- HYBRID STORAGE ADAPTER ---
+// Detects if running inside a Chrome Extension or a standard mobile/desktop web browser
+const isExtension = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+
+function getStorageData(keys, callback) {
+  if (isExtension) {
+    chrome.storage.local.get(keys, callback);
+  } else {
+    const result = {};
+    keys.forEach(key => {
+      const val = localStorage.getItem(key);
+      try {
+        result[key] = val ? JSON.parse(val) : null;
+      } catch (e) {
+        result[key] = val;
+      }
+    });
+    callback(result);
+  }
+}
+
+function setStorageData(data, callback) {
+  if (isExtension) {
+    chrome.storage.local.set(data, callback);
+  } else {
+    Object.keys(data).forEach(key => {
+      const val = typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]);
+      localStorage.setItem(key, val);
+    });
+    if (callback) callback();
+  }
+}
+
 let allSites = [];
 let activeCategory = 'all';
 let searchQuery = '';
@@ -29,9 +62,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const syncBadge = document.getElementById('sync-badge');
   const syncDesc = document.getElementById('sync-desc');
 
+  // Settings & Mobile Sync elements
+  const btnSettings = document.getElementById('btn-settings');
+  const settingsModal = document.getElementById('settings-modal');
+  const closeSettingsModal = document.getElementById('close-settings-modal');
+  const sheetsWebhookUrlInput = document.getElementById('sheets-webhook-url');
+  const btnSaveSync = document.getElementById('btn-save-sync');
+  const modalSheetsWebhookUrlInput = document.getElementById('modal-sheets-webhook-url');
+  const modalBtnSaveSync = document.getElementById('modal-btn-save-sync');
+  const modalBtnGuide = document.getElementById('modal-btn-guide');
+
   // 1. Initial Load of Storage Data
   function loadData() {
-    chrome.storage.local.get(['savedSites', 'sheetsWebhookUrl'], (result) => {
+    getStorageData(['savedSites', 'sheetsWebhookUrl'], (result) => {
       allSites = result.savedSites || [];
       const webhookUrl = result.sheetsWebhookUrl || "";
 
@@ -39,6 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (webhookUrl) {
         syncBadge.className = 'sync-dot active';
         syncDesc.innerHTML = 'Linked to Google Sheets. Updates sync in real-time.';
+        if (sheetsWebhookUrlInput) sheetsWebhookUrlInput.value = webhookUrl;
+        if (modalSheetsWebhookUrlInput) modalSheetsWebhookUrlInput.value = webhookUrl;
+        fetchDataFromCloud(); // Auto pull from Google Sheet on startup!
       } else {
         syncBadge.className = 'sync-dot';
         syncDesc.innerHTML = 'Sync is inactive. Go to Connection Guide to link Google Sheets.';
@@ -46,6 +92,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
       calculateCategoryCounts();
       renderGrid();
+    });
+  }
+
+  // Real-time Cloud Pull GET sync
+  async function fetchDataFromCloud() {
+    getStorageData(['sheetsWebhookUrl'], async (result) => {
+      const webhookUrl = result.sheetsWebhookUrl;
+      if (!webhookUrl) return;
+      
+      syncDesc.innerText = "Syncing with cloud...";
+      
+      try {
+        const response = await fetch(webhookUrl);
+        const cloudData = await response.json();
+        if (Array.isArray(cloudData)) {
+          allSites = cloudData;
+          setStorageData({ savedSites: allSites }, () => {
+            calculateCategoryCounts();
+            renderGrid();
+            console.log("Synced websites from Google Sheets:", allSites);
+            syncDesc.innerHTML = 'Linked to Google Sheets. Updates sync in real-time.';
+          });
+        }
+      } catch (err) {
+        console.error("Cloud pull sync failed:", err);
+        syncDesc.innerHTML = 'Linked to Google Sheets. Offline/Sync Error.';
+      }
     });
   }
 
@@ -180,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirm(`Are you sure you want to remove this platform?`)) return;
 
     allSites = allSites.filter(site => site.domain !== domain);
-    chrome.storage.local.set({ savedSites: allSites }, () => {
+    setStorageData({ savedSites: allSites }, () => {
       calculateCategoryCounts();
       renderGrid();
     });
@@ -214,6 +287,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- MODAL DIALOGS CONTROLS ---
 
+  // Settings Modal opening/closing
+  if (btnSettings) {
+    btnSettings.addEventListener('click', () => {
+      settingsModal.classList.add('active');
+    });
+  }
+  if (closeSettingsModal) {
+    closeSettingsModal.addEventListener('click', () => {
+      settingsModal.classList.remove('active');
+    });
+  }
+  if (modalBtnGuide) {
+    modalBtnGuide.addEventListener('click', () => {
+      settingsModal.classList.remove('active');
+      guideModal.classList.add('active');
+    });
+  }
+
+  // Save Sync Link Logic
+  function saveSyncUrl(url) {
+    url = url.trim();
+    if (url === '') {
+      setStorageData({ sheetsWebhookUrl: '' }, () => {
+        alert('Sheets connection link cleared.');
+        if (sheetsWebhookUrlInput) sheetsWebhookUrlInput.value = '';
+        if (modalSheetsWebhookUrlInput) modalSheetsWebhookUrlInput.value = '';
+        syncBadge.className = 'sync-dot';
+        syncDesc.innerHTML = 'Sync is inactive. Go to Connection Guide to link Google Sheets.';
+        loadData();
+      });
+      return;
+    }
+    if (!url.startsWith('https://script.google.com/')) {
+      alert('Invalid Web App URL. Must start with https://script.google.com/');
+      return;
+    }
+    setStorageData({ sheetsWebhookUrl: url }, () => {
+      alert('Google Sheets Sync URL successfully saved!');
+      if (sheetsWebhookUrlInput) sheetsWebhookUrlInput.value = url;
+      if (modalSheetsWebhookUrlInput) modalSheetsWebhookUrlInput.value = url;
+      syncBadge.className = 'sync-dot active';
+      syncDesc.innerHTML = 'Linked to Google Sheets. Updates sync in real-time.';
+      if (settingsModal) settingsModal.classList.remove('active');
+      fetchDataFromCloud(); // Automatic pull on save!
+    });
+  }
+
+  if (btnSaveSync) {
+    btnSaveSync.addEventListener('click', () => {
+      saveSyncUrl(sheetsWebhookUrlInput.value);
+    });
+  }
+  if (modalBtnSaveSync) {
+    modalBtnSaveSync.addEventListener('click', () => {
+      saveSyncUrl(modalSheetsWebhookUrlInput.value);
+    });
+  }
+
   // Manual Add Modal opening/closing
   btnManualAdd.addEventListener('click', () => addModal.classList.add('active'));
   closeAddModal.addEventListener('click', () => addModal.classList.remove('active'));
@@ -226,6 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('click', (e) => {
     if (e.target === addModal) addModal.classList.remove('active');
     if (e.target === guideModal) guideModal.classList.remove('active');
+    if (e.target === settingsModal) settingsModal.classList.remove('active');
   });
 
   // 7. Manual Add Website Form Submit
@@ -268,8 +400,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Save to storage and check webhook
-    chrome.storage.local.get(['sheetsWebhookUrl'], (result) => {
-      chrome.storage.local.set({ savedSites: allSites }, () => {
+    getStorageData(['sheetsWebhookUrl'], (result) => {
+      setStorageData({ savedSites: allSites }, () => {
         // Reset form & close modal
         addForm.reset();
         addModal.classList.remove('active');

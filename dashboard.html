@@ -72,7 +72,13 @@
             <span id="sync-badge" class="sync-dot"></span>
           </div>
           <p id="sync-desc" class="sync-text">Automatically syncs entries to Google Sheets.</p>
-          <button id="open-sync-guide" class="btn-banner">Connection Guide</button>
+          <div style="margin-top: 8px; margin-bottom: 8px;">
+            <input type="text" id="sheets-webhook-url" placeholder="Paste Web App URL here" style="width: 100%; font-size: 11px; padding: 6px; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border); border-radius: 6px; color: var(--text); outline: none;">
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button id="btn-save-sync" class="btn-banner" style="flex: 1; padding: 4px 6px;">Save Link</button>
+            <button id="open-sync-guide" class="btn-banner" style="flex: 1; padding: 4px 6px; background: transparent; border: 1px solid var(--border);">Guide 📖</button>
+          </div>
         </div>
       </div>
     </aside>
@@ -87,6 +93,9 @@
         </div>
 
         <div class="action-buttons">
+          <button id="btn-settings" class="action-btn" title="Sheets Connection Settings" style="padding: 10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
           <button id="btn-manual-add" class="action-btn action-btn-primary">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span>Add Platform</span>
@@ -193,6 +202,47 @@
         </div>
         <pre class="code-box"><code id="code-snippet">
 // Google Sheets Connector Script (Ready to Copy)
+function doGet(e) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    const rows = sheet.getDataRange().getValues();
+    
+    if (rows.length <= 1) {
+      return ContentService.createTextOutput(JSON.stringify([]))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    const platforms = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      
+      // Parse formula URL if present
+      let url = String(row[3]);
+      if (url.includes("HYPERLINK")) {
+        const match = url.match(/"([^"]+)"/);
+        if (match && match[1]) {
+          url = match[1];
+        }
+      }
+      
+      platforms.push({
+        title: String(row[0]),
+        category: String(row[1]),
+        description: String(row[2]),
+        url: url,
+        domain: String(row[4]),
+        timestamp: row[5] ? new Date(row[5]).toISOString() : new Date().toISOString()
+      });
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify(platforms))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
@@ -202,6 +252,28 @@ function doPost(e) {
     if (sheet.getLastRow() === 0) {
       sheet.appendRow(["Website Name", "Category", "Description", "Clickable Launch Link", "Domain Key", "Date Added"]);
       sheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#e0e7ff");
+    }
+    
+    // DUPLICATE CHECK: Search Column E (Domain Key)
+    const rows = sheet.getDataRange().getValues();
+    let isDuplicate = false;
+    let duplicateRowIndex = -1;
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][4]).toLowerCase() === String(data.domain).toLowerCase()) {
+        isDuplicate = true;
+        duplicateRowIndex = i + 1;
+        break;
+      }
+    }
+    
+    if (isDuplicate) {
+      // Update existing row's title, description and timestamp instead of creating duplicate row
+      sheet.getRange(duplicateRowIndex, 1).setValue(data.title);
+      sheet.getRange(duplicateRowIndex, 3).setValue(data.description);
+      sheet.getRange(duplicateRowIndex, 6).setValue(new Date(data.timestamp).toLocaleString());
+      
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Duplicate domain updated"}))
+        .setMimeType(ContentService.MimeType.JSON);
     }
     
     // Make link clickable using Sheet formula
@@ -225,6 +297,29 @@ function doPost(e) {
   }
 }
         </code></pre>
+      </div>
+    </div>
+  <!-- MODAL: SETTINGS & SYNC -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Sheets Connection Settings</h2>
+        <button class="close-modal" id="close-settings-modal">&times;</button>
+      </div>
+      <div class="modal-form" style="gap: 16px;">
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: left;">
+          <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px;">
+            <span>📊</span> Google Sheets Cloud Sync
+          </h4>
+          <p id="modal-sync-desc" style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5;">Automatically syncs entries to Google Sheets.</p>
+          <div style="margin-bottom: 12px;">
+            <input type="text" id="modal-sheets-webhook-url" placeholder="Paste Web App URL here" style="width: 100%; font-size: 12px; padding: 10px; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border); border-radius: 8px; color: var(--text); outline: none;">
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="modal-btn-save-sync" class="action-btn action-btn-primary" style="flex: 1; justify-content: center; font-size: 12px; padding: 8px 12px;">Save Link</button>
+            <button id="modal-btn-guide" class="action-btn" style="flex: 1; justify-content: center; font-size: 12px; padding: 8px 12px; background: transparent; border: 1px solid var(--border);">Guide 📖</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
