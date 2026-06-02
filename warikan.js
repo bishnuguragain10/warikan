@@ -1117,7 +1117,8 @@ Example JSON structure:
           paidBy: payer,
           cost: Math.round(item.price * currentTaxMultiplier),
           assignedTo: item.assignedTo,
-          receiptId: receiptId // Save receipt ID association in Google Sheets
+          receiptId: receiptId, // Save receipt ID association in Google Sheets
+          receiptPhoto: currentReceiptPhotoBase64 || ''
         };
         return fetch(syncUrl, {
           method: 'POST',
@@ -1791,12 +1792,17 @@ Example JSON structure:
           btnView.addEventListener('click', async (e) => {
             e.stopPropagation();
             const rId = e.currentTarget.getAttribute('data-receipt-id');
-            const photoBase64 = await getReceiptPhoto(rId);
-            if (photoBase64) {
-              document.getElementById('lightbox-img').src = photoBase64;
+            if (rId && (rId.startsWith('http://') || rId.startsWith('https://'))) {
+              document.getElementById('lightbox-img').src = rId;
               document.getElementById('lightbox-modal').classList.add('active');
             } else {
-              alert("⚠️ Receipt photo could not be found locally in this browser's cache.");
+              const photoBase64 = await getReceiptPhoto(rId);
+              if (photoBase64) {
+                document.getElementById('lightbox-img').src = photoBase64;
+                document.getElementById('lightbox-modal').classList.add('active');
+              } else {
+                alert("⚠️ Receipt photo could not be found locally in this browser's cache.");
+              }
             }
           });
         }

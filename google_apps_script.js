@@ -60,6 +60,19 @@ function doGet(e) {
   }
 }
 
+// Helper to find or create the Google Drive receipts folder
+function getOrCreateFolder() {
+  const folderName = "Warikan Receipts";
+  const folders = DriveApp.getFoldersByName(folderName);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  const newFolder = DriveApp.createFolder(folderName);
+  // Set sharing to "Anyone with link can view" so roommate devices can load the images
+  newFolder.setSharing(SpreadsheetApp.Access.ANYONE_WITH_LINK, SpreadsheetApp.Permission.VIEW);
+  return newFolder;
+}
+
 // 2. HANDLE WRITING DATA (POST request when Bishnu or Radha adds/deletes/clears an expense)
 function doPost(e) {
   const lock = LockService.getScriptLock();
@@ -136,6 +149,26 @@ function doPost(e) {
     }
     
     // C. DEFAULT: APPEND NEW TRANSACTION ROW
+    let photoLink = data.receiptId || "";
+    
+    // If a base64 photo buffer is provided, save it directly to Google Drive
+    if (data.receiptPhoto) {
+      try {
+        const folder = getOrCreateFolder();
+        const base64Data = data.receiptPhoto.split(',')[1] || data.receiptPhoto;
+        const decoded = Utilities.base64Decode(base64Data);
+        const blob = Utilities.newBlob(decoded, 'image/jpeg', 'receipt_' + Date.now() + '.jpg');
+        
+        const file = folder.createFile(blob);
+        file.setSharing(SpreadsheetApp.Access.ANYONE_WITH_LINK, SpreadsheetApp.Permission.VIEW);
+        
+        const fileId = file.getId();
+        photoLink = "https://docs.google.com/uc?export=download&id=" + fileId;
+      } catch (err) {
+        Logger.log("Google Drive photo upload failed: " + err.toString());
+      }
+    }
+
     sheet.appendRow([
       data.store,
       data.assignedTo,
@@ -143,7 +176,7 @@ function doPost(e) {
       data.cost,
       data.paidBy,
       data.date,
-      data.receiptId || "" // Store local unique Receipt ID association if present
+      photoLink // Save either Google Drive direct download link or unique local ID
     ]);
     
     // Align values
