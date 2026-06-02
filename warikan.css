@@ -1019,9 +1019,15 @@ body {
 
 /* Collapsible Child Rows */
 .child-row {
-  background: rgba(255, 255, 255, 0.015);
-  border-left: 3px dashed var(--primary);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(8, 10, 15, 0.85) !important;
+  border-left: 3px solid rgba(168, 85, 247, 0.5) !important;
+  transition: all 0.2s ease;
+}
+
+.child-row td {
+  font-size: 12.5px !important;
+  color: var(--text-muted) !important;
+  padding: 10px 20px !important; /* Slightly tighter vertical padding than parent rows */
 }
 
 .child-row.hidden {
@@ -1029,7 +1035,7 @@ body {
 }
 
 .child-row:hover {
-  background: rgba(99, 102, 241, 0.03) !important;
+  background: rgba(168, 85, 247, 0.05) !important;
 }
 
 /* Accordion Arrow Toggle style */
