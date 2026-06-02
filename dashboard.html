@@ -217,21 +217,20 @@
         </div>
         <pre class="code-box"><code id="code-snippet">
 // Google Sheets Connector Script (Ready to Copy)
+// 1. GET REQUEST: Serves saved web platforms to the dashboard (Two-Way Sync - JSONP Compatible)
 function doGet(e) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     const rows = sheet.getDataRange().getValues();
     
     if (rows.length <= 1) {
-      return ContentService.createTextOutput(JSON.stringify([]))
-        .setMimeType(ContentService.MimeType.JSON);
+      return respondJson([], e);
     }
     
     const platforms = [];
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       
-      // Parse formula URL if present
       let url = String(row[3]);
       if (url.includes("HYPERLINK")) {
         const match = url.match(/"([^"]+)"/);
@@ -250,14 +249,28 @@ function doGet(e) {
       });
     }
     
-    return ContentService.createTextOutput(JSON.stringify(platforms))
-      .setMimeType(ContentService.MimeType.JSON);
+    return respondJson(platforms, e);
+      
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()}))
+    return respondJson({status: "error", message: error.toString()}, e);
+  }
+}
+
+// Helper to support both standard JSON and CORS-safe JSONP
+function respondJson(data, e) {
+  const jsonString = JSON.stringify(data);
+  const callback = e && e.parameter && e.parameter.callback;
+  
+  if (callback) {
+    return ContentService.createTextOutput(callback + "(" + jsonString + ")")
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  } else {
+    return ContentService.createTextOutput(jsonString)
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
+// 2. POST REQUEST: Saves, edits, or deletes websites from Chrome Extension or Mobile browser (Duplicate-Safe)
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);

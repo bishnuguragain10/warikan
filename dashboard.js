@@ -96,30 +96,56 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Real-time Cloud Pull GET sync
-  async function fetchDataFromCloud() {
-    getStorageData(['sheetsWebhookUrl'], async (result) => {
+  // Real-time Cloud Pull GET sync using secure JSONP (bypasses browser CORS blocks entirely)
+  function fetchDataFromCloud() {
+    getStorageData(['sheetsWebhookUrl'], (result) => {
       const webhookUrl = result.sheetsWebhookUrl;
       if (!webhookUrl) return;
       
       syncDesc.innerText = "Syncing with cloud...";
       
-      try {
-        const response = await fetch(webhookUrl);
-        const cloudData = await response.json();
+      // Create a unique callback name
+      const callbackName = 'jsonpCallback_' + Math.round(100000 * Math.random());
+      
+      // Define the callback globally so the script can invoke it
+      window[callbackName] = function(cloudData) {
+        // Clean up script tag and global callback function
+        delete window[callbackName];
+        const scriptEl = document.getElementById(callbackName);
+        if (scriptEl) scriptEl.remove();
+        
         if (Array.isArray(cloudData)) {
           allSites = cloudData;
           setStorageData({ savedSites: allSites }, () => {
             calculateCategoryCounts();
             renderGrid();
-            console.log("Synced websites from Google Sheets:", allSites);
+            console.log("Synced websites from Google Sheets via JSONP:", allSites);
             syncDesc.innerHTML = 'Linked to Google Sheets. Updates sync in real-time.';
           });
+        } else {
+          console.error("Cloud data is not an array:", cloudData);
+          syncDesc.innerHTML = 'Linked to Google Sheets. Sync Format Error.';
         }
-      } catch (err) {
-        console.error("Cloud pull sync failed:", err);
+      };
+      
+      // Inject the script element
+      const script = document.createElement('script');
+      script.id = callbackName;
+      
+      // Append callback parameter to URL
+      const separator = webhookUrl.includes('?') ? '&' : '?';
+      script.src = `${webhookUrl}${separator}callback=${callbackName}`;
+      
+      // Error fallback
+      script.onerror = function() {
+        delete window[callbackName];
+        const scriptEl = document.getElementById(callbackName);
+        if (scriptEl) scriptEl.remove();
+        console.error("JSONP sync request failed.");
         syncDesc.innerHTML = 'Linked to Google Sheets. Offline/Sync Error.';
-      }
+      };
+      
+      document.body.appendChild(script);
     });
   }
 

@@ -1,7 +1,7 @@
 // google_apps_script.js
 // Paste this script inside your Google Sheets Extensions > Apps Script panel to link your Premium Web Launchpad.
 
-// 1. GET REQUEST: Serves saved web platforms to the dashboard (Two-Way Sync)
+// 1. GET REQUEST: Serves saved web platforms to the dashboard (Two-Way Sync - JSONP Compatible)
 function doGet(e) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -9,8 +9,7 @@ function doGet(e) {
     
     // If empty or only headers
     if (rows.length <= 1) {
-      return ContentService.createTextOutput(JSON.stringify([]))
-        .setMimeType(ContentService.MimeType.JSON);
+      return respondJson([], e);
     }
     
     const platforms = [];
@@ -36,11 +35,23 @@ function doGet(e) {
       });
     }
     
-    return ContentService.createTextOutput(JSON.stringify(platforms))
-      .setMimeType(ContentService.MimeType.JSON);
+    return respondJson(platforms, e);
       
   } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.toString()}))
+    return respondJson({status: "error", message: error.toString()}, e);
+  }
+}
+
+// Helper to support both standard JSON and CORS-safe JSONP
+function respondJson(data, e) {
+  const jsonString = JSON.stringify(data);
+  const callback = e && e.parameter && e.parameter.callback;
+  
+  if (callback) {
+    return ContentService.createTextOutput(callback + "(" + jsonString + ")")
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  } else {
+    return ContentService.createTextOutput(jsonString)
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
