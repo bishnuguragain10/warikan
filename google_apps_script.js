@@ -150,13 +150,16 @@ function doPost(e) {
     
     // D. RETROACTIVELY UPLOAD OFFLINE PHOTO TO GOOGLE DRIVE
     if (data.action === "upload_photo") {
+      Logger.log("Triggered upload_photo action for ID: " + data.receiptId);
       if (!data.receiptPhoto) {
+        Logger.log("Error: No photo data provided");
         return ContentService.createTextOutput(JSON.stringify({status: "error", message: "No photo data provided"}))
           .setMimeType(ContentService.MimeType.JSON);
       }
       
       try {
         const folder = getOrCreateFolder();
+        Logger.log("Drive folder: " + folder.getName());
         const base64Data = data.receiptPhoto.split(',')[1] || data.receiptPhoto;
         const decoded = Utilities.base64Decode(base64Data);
         const blob = Utilities.newBlob(decoded, 'image/jpeg', 'receipt_' + Date.now() + '.jpg');
@@ -166,16 +169,22 @@ function doPost(e) {
         
         const fileId = file.getId();
         const photoLink = "https://docs.google.com/uc?export=download&id=" + fileId;
+        Logger.log("File uploaded to Drive successfully. Link: " + photoLink);
         
         // Find all rows matching the old local receiptId and update Column 7
         const rows = sheet.getDataRange().getValues();
+        Logger.log("Total rows found in sheet: " + rows.length);
         let updatedCount = 0;
         for (let i = 1; i < rows.length; i++) {
-          if (String(rows[i][6]) === data.receiptId) {
+          const sheetId = String(rows[i][6]).trim();
+          const targetId = String(data.receiptId).trim();
+          if (sheetId === targetId) {
             sheet.getRange(i + 1, 7).setValue(photoLink);
             updatedCount++;
+            Logger.log("Match found at row " + (i + 1) + ". Updated Column G to: " + photoLink);
           }
         }
+        Logger.log("Scan complete. Total rows updated: " + updatedCount);
         
         return ContentService.createTextOutput(JSON.stringify({
           status: "success", 
@@ -184,6 +193,7 @@ function doPost(e) {
         })).setMimeType(ContentService.MimeType.JSON);
         
       } catch (err) {
+        Logger.log("Crash inside upload_photo action: " + err.toString());
         return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()}))
           .setMimeType(ContentService.MimeType.JSON);
       }
