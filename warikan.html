@@ -150,6 +150,12 @@
                 <input type="text" id="sheets-sync-url" placeholder="Paste Web App URL here" style="width: 100%; font-size: 11px; padding: 8px; background: rgba(10, 12, 18, 0.6); border: 1px solid var(--border); border-radius: 6px; color: var(--text); outline: none;">
               </div>
               <button id="btn-save-sync" class="btn btn-secondary" style="width: 100%; padding: 6px 10px; font-size: 11px; background: var(--primary); border: none; box-shadow: 0 4px 10px var(--primary-glow); border-radius: 6px; cursor: pointer; color: white; font-weight: 600;">Save & Sync Cloud</button>
+              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border);">
+                <button id="btn-sync-offline-photos" class="btn btn-secondary" style="width: 100%; font-size: 11px; font-weight: 600; padding: 6px 10px; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+                  <span>☁️</span> Sync Offline Photos to Cloud
+                </button>
+                <div id="sync-photos-status" style="font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 6px; display: none;"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -368,6 +374,6 @@
     </div>
   </div>
 
-  <script src="warikan.js?v=37"></script>
+  <script src="warikan.js?v=38"></script>
 </body>
 </html>

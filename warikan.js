@@ -169,6 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Cloud Sync Elements
   const sheetsSyncUrlInput = document.getElementById('sheets-sync-url');
   const btnSaveSync = document.getElementById('btn-save-sync');
+  const btnSyncOfflinePhotos = document.getElementById('btn-sync-offline-photos');
+  const syncPhotosStatus = document.getElementById('sync-photos-status');
 
   // Gemini AI Elements
   const geminiApiKeyInput = document.getElementById('gemini-api-key');
@@ -216,6 +218,87 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('warikanSyncUrl', url);
       alert('Google Sheets URL saved. Syncing with cloud...');
       fetchLedgerFromCloud();
+    });
+  }
+
+  if (btnSyncOfflinePhotos) {
+    btnSyncOfflinePhotos.addEventListener('click', async () => {
+      const syncUrl = localStorage.getItem('warikanSyncUrl');
+      if (!syncUrl) {
+        alert('⚠️ Please configure and save your Google Sheets Sync URL first!');
+        return;
+      }
+
+      // Find unique local receipt IDs in the current ledger
+      const localIds = new Set();
+      currentLedger.forEach(item => {
+        if (item.receiptId && item.receiptId.startsWith('rcpt_')) {
+          localIds.add(item.receiptId);
+        }
+      });
+
+      if (localIds.size === 0) {
+        alert('✨ No offline receipt photos found in your ledger. Everything is in sync!');
+        return;
+      }
+
+      if (!confirm(`Found ${localIds.size} offline receipt photo(s) on this device.\n\nWould you like to upload them to Google Drive now?\nThis will make them visible on all roommate devices!`)) {
+        return;
+      }
+
+      btnSyncOfflinePhotos.disabled = true;
+      syncPhotosStatus.style.display = 'block';
+      syncPhotosStatus.style.color = '#34d399';
+      
+      const idsArray = Array.from(localIds);
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < idsArray.length; i++) {
+        const rId = idsArray[i];
+        syncPhotosStatus.innerText = `Syncing photo ${i + 1} of ${idsArray.length}...`;
+        
+        try {
+          const photoBase64 = await getReceiptPhoto(rId);
+          if (!photoBase64) {
+            console.warn(`Local photo not found in IndexedDB for receipt: ${rId}`);
+            failCount++;
+            continue;
+          }
+
+          // Upload photo to Google Sheets Web App
+          await fetch(syncUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'upload_photo',
+              receiptId: rId,
+              receiptPhoto: photoBase64
+            })
+          });
+          
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to upload photo for receipt ${rId}:`, err);
+          failCount++;
+        }
+      }
+
+      // Batch complete! Refetch from cloud to pull the updated Google Drive URLs
+      syncPhotosStatus.innerText = 'Refreshing cloud ledger...';
+      
+      try {
+        await fetchLedgerFromCloud();
+        syncPhotosStatus.innerText = `✅ Sync complete! Uploaded ${successCount} photo(s).`;
+        setTimeout(() => {
+          syncPhotosStatus.style.display = 'none';
+        }, 5000);
+      } catch (err) {
+        syncPhotosStatus.innerText = 'Sync complete, but failed to refresh ledger. Please refresh the page.';
+      } finally {
+        btnSyncOfflinePhotos.disabled = false;
+      }
     });
   }
 

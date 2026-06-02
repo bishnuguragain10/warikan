@@ -148,6 +148,47 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     
+    // D. RETROACTIVELY UPLOAD OFFLINE PHOTO TO GOOGLE DRIVE
+    if (data.action === "upload_photo") {
+      if (!data.receiptPhoto) {
+        return ContentService.createTextOutput(JSON.stringify({status: "error", message: "No photo data provided"}))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      try {
+        const folder = getOrCreateFolder();
+        const base64Data = data.receiptPhoto.split(',')[1] || data.receiptPhoto;
+        const decoded = Utilities.base64Decode(base64Data);
+        const blob = Utilities.newBlob(decoded, 'image/jpeg', 'receipt_' + Date.now() + '.jpg');
+        
+        const file = folder.createFile(blob);
+        file.setSharing(SpreadsheetApp.Access.ANYONE_WITH_LINK, SpreadsheetApp.Permission.VIEW);
+        
+        const fileId = file.getId();
+        const photoLink = "https://docs.google.com/uc?export=download&id=" + fileId;
+        
+        // Find all rows matching the old local receiptId and update Column 7
+        const rows = sheet.getDataRange().getValues();
+        let updatedCount = 0;
+        for (let i = 1; i < rows.length; i++) {
+          if (String(rows[i][6]) === data.receiptId) {
+            sheet.getRange(i + 1, 7).setValue(photoLink);
+            updatedCount++;
+          }
+        }
+        
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success", 
+          photoLink: photoLink, 
+          updatedRows: updatedCount
+        })).setMimeType(ContentService.MimeType.JSON);
+        
+      } catch (err) {
+        return ContentService.createTextOutput(JSON.stringify({status: "error", message: err.toString()}))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+    
     // C. DEFAULT: APPEND NEW TRANSACTION ROW
     let photoLink = data.receiptId || "";
     
