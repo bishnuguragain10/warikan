@@ -18,6 +18,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
         </div>
         <span class="brand-name">Launchpad Hub</span>
+        <button id="close-sidebar" class="close-sidebar-btn" title="Close categories">&times;</button>
       </div>
 
       <nav class="nav-menu">
@@ -85,6 +86,20 @@
 
     <!-- Main Workspace Content -->
     <main class="main-content">
+      <!-- Mobile Top Bar -->
+      <div class="mobile-top-bar">
+        <button id="btn-menu-toggle" class="menu-toggle-btn" title="Open Categories Menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="brand" style="border: none; padding: 0; background: transparent;">
+          <div class="brand-logo" style="width: 28px; height: 28px; border-radius: 8px; box-shadow: 0 0 10px var(--primary-glow);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </div>
+          <span class="brand-name" style="font-size: 15px;">Launchpad Hub</span>
+        </div>
+        <div style="width: 32px;"></div> <!-- Spacer to keep brand centered -->
+      </div>
+
       <!-- Top Action Bar -->
       <header class="header">
         <div class="search-container">
@@ -339,6 +354,7 @@ function doPost(e) {
         </code></pre>
       </div>
     </div>
+  </div>
   <!-- MODAL: SETTINGS & SYNC -->
   <div id="settings-modal" class="modal-overlay">
     <div class="modal-card">
@@ -363,6 +379,9 @@ function doPost(e) {
       </div>
     </div>
   </div>
+
+  <!-- Mobile Sidebar Drawer Overlay Backdrop -->
+  <div id="sidebar-overlay" class="drawer-overlay"></div>
 
   <script src="dashboard.js"></script>
 </body>

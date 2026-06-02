@@ -305,9 +305,37 @@ document.addEventListener('DOMContentLoaded', () => {
     addModal.classList.add('active');
   }
 
+  // Mobile drawer controls
+  const menuToggle = document.getElementById('btn-menu-toggle');
+  const closeSidebarBtn = document.getElementById('close-sidebar');
+  const sidebarOverlay = document.getElementById('sidebar-overlay');
+  const sidebar = document.querySelector('.sidebar');
+
+  if (menuToggle) {
+    menuToggle.addEventListener('click', () => {
+      sidebar.classList.add('active');
+      sidebarOverlay.classList.add('active');
+    });
+  }
+
+  function closeMobileSidebar() {
+    if (sidebar) sidebar.classList.remove('active');
+    if (sidebarOverlay) sidebarOverlay.classList.remove('active');
+  }
+
+  if (closeSidebarBtn) {
+    closeSidebarBtn.addEventListener('click', closeMobileSidebar);
+  }
+
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener('click', closeMobileSidebar);
+  }
+
   // 5. Category Navigation click handling
   navItems.forEach(item => {
     item.addEventListener('click', (e) => {
+      closeMobileSidebar(); // Slide drawer back off-screen on click
+      
       navItems.forEach(i => i.classList.remove('active'));
       e.currentTarget.classList.add('active');
 
