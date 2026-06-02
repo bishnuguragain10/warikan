@@ -69,7 +69,7 @@ function getOrCreateFolder() {
   }
   const newFolder = DriveApp.createFolder(folderName);
   // Set sharing to "Anyone with link can view" so roommate devices can load the images
-  newFolder.setSharing(SpreadsheetApp.Access.ANYONE_WITH_LINK, SpreadsheetApp.Permission.VIEW);
+  newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   return newFolder;
 }
 
@@ -162,7 +162,7 @@ function doPost(e) {
         const blob = Utilities.newBlob(decoded, 'image/jpeg', 'receipt_' + Date.now() + '.jpg');
         
         const file = folder.createFile(blob);
-        file.setSharing(SpreadsheetApp.Access.ANYONE_WITH_LINK, SpreadsheetApp.Permission.VIEW);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
         
         const fileId = file.getId();
         const photoLink = "https://docs.google.com/uc?export=download&id=" + fileId;
@@ -201,7 +201,7 @@ function doPost(e) {
         const blob = Utilities.newBlob(decoded, 'image/jpeg', 'receipt_' + Date.now() + '.jpg');
         
         const file = folder.createFile(blob);
-        file.setSharing(SpreadsheetApp.Access.ANYONE_WITH_LINK, SpreadsheetApp.Permission.VIEW);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
         
         const fileId = file.getId();
         photoLink = "https://docs.google.com/uc?export=download&id=" + fileId;
