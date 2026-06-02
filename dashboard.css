@@ -543,6 +543,12 @@ body {
   border-color: var(--border);
 }
 
+.btn-edit:hover {
+  background: rgba(99, 102, 241, 0.1);
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
 .btn-delete:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;

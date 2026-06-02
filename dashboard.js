@@ -37,6 +37,7 @@ function setStorageData(data, callback) {
 let allSites = [];
 let activeCategory = 'all';
 let searchQuery = '';
+let editingDomain = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   // Elements
@@ -223,9 +224,14 @@ document.addEventListener('DOMContentLoaded', () => {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             <span>Launch Site</span>
           </a>
-          <button class="btn-icon-only btn-delete" data-domain="${site.domain}" title="Delete platform">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-          </button>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn-icon-only btn-edit" data-domain="${site.domain}" title="Edit platform">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+            </button>
+            <button class="btn-icon-only btn-delete" data-domain="${site.domain}" title="Delete platform">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            </button>
+          </div>
         </div>
       `;
 
@@ -238,6 +244,12 @@ document.addEventListener('DOMContentLoaded', () => {
         card.style.setProperty('--y', `${y}px`);
       });
 
+      // Bind edit action
+      card.querySelector('.btn-edit').addEventListener('click', (e) => {
+        const domainToEdit = e.currentTarget.getAttribute('data-domain');
+        openEditModal(domainToEdit);
+      });
+
       // Bind delete action
       card.querySelector('.btn-delete').addEventListener('click', (e) => {
         const domainToDelete = e.currentTarget.getAttribute('data-domain');
@@ -248,15 +260,49 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 4. Delete Site Action
+  // 4. Delete Site Action (with remote cloud sync)
   function deleteSite(domain) {
     if (!confirm(`Are you sure you want to remove this platform?`)) return;
 
     allSites = allSites.filter(site => site.domain !== domain);
-    setStorageData({ savedSites: allSites }, () => {
-      calculateCategoryCounts();
-      renderGrid();
+    
+    getStorageData(['sheetsWebhookUrl'], (result) => {
+      setStorageData({ savedSites: allSites }, () => {
+        calculateCategoryCounts();
+        renderGrid();
+
+        // Direct webhook automated sync for permanent deletion
+        const webhookUrl = result.sheetsWebhookUrl;
+        if (webhookUrl) {
+          fetch(webhookUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', domain: domain })
+          }).then(() => console.log('Automated Sync deletion successful.'))
+            .catch(err => console.error('Automated deletion sync failed:', err));
+        }
+      });
     });
+  }
+
+  // 4b. Open Edit Modal Action
+  function openEditModal(domain) {
+    const site = allSites.find(s => s.domain === domain);
+    if (!site) return;
+
+    editingDomain = domain;
+    
+    document.getElementById('add-title').value = site.title;
+    document.getElementById('add-url').value = site.url;
+    document.getElementById('add-category').value = site.category;
+    document.getElementById('add-desc').value = site.description;
+
+    // Modify modal titles
+    document.querySelector('#add-modal h2').innerText = "Edit Web Platform";
+    addForm.querySelector('button[type="submit"]').innerText = "Update Web Platform";
+    
+    addModal.classList.add('active');
   }
 
   // 5. Category Navigation click handling
@@ -346,7 +392,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Manual Add Modal opening/closing
-  btnManualAdd.addEventListener('click', () => addModal.classList.add('active'));
+  btnManualAdd.addEventListener('click', () => {
+    editingDomain = null;
+    addForm.reset();
+    document.querySelector('#add-modal h2').innerText = "Add New Web Platform";
+    addForm.querySelector('button[type="submit"]').innerText = "Save Web Platform";
+    addModal.classList.add('active');
+  });
   closeAddModal.addEventListener('click', () => addModal.classList.remove('active'));
 
   // Sync Guide Modal opening/closing
@@ -360,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === settingsModal) settingsModal.classList.remove('active');
   });
 
-  // 7. Manual Add Website Form Submit
+  // 7. Manual Add Website Form Submit (supports Edit and Add modes)
   addForm.addEventListener('submit', (e) => {
     e.preventDefault();
 
@@ -388,39 +440,74 @@ document.addEventListener('DOMContentLoaded', () => {
       timestamp: new Date().toISOString()
     };
 
-    // Check if duplicate domain exists
-    const duplicateIndex = allSites.findIndex(site => site.domain === domain);
-    if (duplicateIndex !== -1) {
-      if (!confirm('A saved platform with this domain already exists. Do you want to update it?')) {
-        return;
+    if (editingDomain) {
+      // EDIT MODE
+      const index = allSites.findIndex(site => site.domain === editingDomain);
+      if (index !== -1) {
+        allSites[index] = newRecord;
+      } else {
+        allSites.push(newRecord);
       }
-      allSites[duplicateIndex] = newRecord;
-    } else {
-      allSites.push(newRecord);
-    }
 
-    // Save to storage and check webhook
-    getStorageData(['sheetsWebhookUrl'], (result) => {
-      setStorageData({ savedSites: allSites }, () => {
-        // Reset form & close modal
-        addForm.reset();
-        addModal.classList.remove('active');
-        
-        calculateCategoryCounts();
-        renderGrid();
+      getStorageData(['sheetsWebhookUrl'], (result) => {
+        setStorageData({ savedSites: allSites }, () => {
+          const original = editingDomain;
+          editingDomain = null;
+          addForm.reset();
+          addModal.classList.remove('active');
+          
+          calculateCategoryCounts();
+          renderGrid();
 
-        // Direct webhook automated sync
-        const webhookUrl = result.sheetsWebhookUrl;
-        if (webhookUrl) {
-          fetch(webhookUrl, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newRecord)
-          }).then(() => console.log('Automated Sync successful.'));
-        }
+          const webhookUrl = result.sheetsWebhookUrl;
+          if (webhookUrl) {
+            fetch(webhookUrl, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'edit',
+                originalDomain: original,
+                ...newRecord
+              })
+            }).then(() => console.log('Automated Edit Sync successful.'))
+              .catch(err => console.error('Automated edit sync failed:', err));
+          }
+        });
       });
-    });
+    } else {
+      // ADD MODE
+      const duplicateIndex = allSites.findIndex(site => site.domain === domain);
+      if (duplicateIndex !== -1) {
+        if (!confirm('A saved platform with this domain already exists. Do you want to update it?')) {
+          return;
+        }
+        allSites[duplicateIndex] = newRecord;
+      } else {
+        allSites.push(newRecord);
+      }
+
+      getStorageData(['sheetsWebhookUrl'], (result) => {
+        setStorageData({ savedSites: allSites }, () => {
+          addForm.reset();
+          addModal.classList.remove('active');
+          
+          calculateCategoryCounts();
+          renderGrid();
+
+          const webhookUrl = result.sheetsWebhookUrl;
+          if (webhookUrl) {
+            fetch(webhookUrl, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newRecord)
+            }).then(() => console.log('Automated Add Sync successful.'))
+              .catch(err => console.error('Automated add sync failed:', err));
+          }
+        });
+      });
+    }
   });
 
   // 8. Copy Apps Script Code to Clipboard
