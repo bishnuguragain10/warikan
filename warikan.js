@@ -1163,6 +1163,33 @@ Example JSON structure:
     }
   }
 
+  // --- DETECT DUPLICATE RECEIPTS ---
+  function detectDuplicateReceipt(store, date, totalCost) {
+    const groups = new Map();
+    currentLedger.forEach(item => {
+      const key = item.receiptId || `${item.date}_${item.store}_${item.cost}_${item.paidBy}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          date: item.date,
+          store: item.store.split(' - ')[0] || item.store,
+          cost: 0
+        });
+      }
+      const g = groups.get(key);
+      g.cost += item.cost;
+    });
+
+    const cleanStore = store.split(' - ')[0] || store;
+    for (const g of groups.values()) {
+      if (g.date === date && 
+          g.store.toLowerCase().trim() === cleanStore.toLowerCase().trim() && 
+          g.cost === totalCost) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // --- SAVE SCANNED ITEMS TO LEDGER ---
   btnCommitReceipt.addEventListener('click', async () => {
     // Check if there are any unassigned items left
@@ -1181,15 +1208,57 @@ Example JSON structure:
     const selectedDate = receiptDateInput.value || new Date().toISOString().slice(0, 10);
     const syncUrl = localStorage.getItem('warikanSyncUrl');
 
+    // Calculate scanned total cost for duplicate check
+    let scannedTotal = 0;
+    currentScannedItems.forEach(item => {
+      scannedTotal += Math.round(item.price * currentTaxMultiplier);
+    });
+
+    // Check for duplicate receipt submission
+    if (detectDuplicateReceipt(store, selectedDate, scannedTotal)) {
+      const confirmSave = confirm(`⚠️ Potential Duplicate Detected!\n\nA receipt from "${store}" on ${selectedDate} with a total of ¥${scannedTotal.toLocaleString()} already exists in the ledger.\n\nDo you want to submit it again?`);
+      if (!confirmSave) {
+        return;
+      }
+    }
+
     // 1. Generate unique receipt ID and write photo to local IndexedDB
     const receiptId = currentReceiptPhotoBase64 ? 'rcpt_' + Date.now() : '';
     if (receiptId && currentReceiptPhotoBase64) {
       await saveReceiptPhoto(receiptId, currentReceiptPhotoBase64);
     }
 
+    let finalReceiptId = receiptId;
+
     if (syncUrl) {
       // Show loading overlay
       ocrLoader.style.display = 'flex';
+      ocrProgress.innerText = "Uploading receipt image to Google Drive...";
+
+      // Upload the photo first to Google Drive and retrieve the cloud link
+      if (currentReceiptPhotoBase64) {
+        try {
+          const photoRes = await fetch(syncUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+              action: 'upload_photo',
+              receiptId: receiptId,
+              receiptPhoto: currentReceiptPhotoBase64
+            })
+          });
+          if (photoRes.ok) {
+            const photoData = await photoRes.json();
+            if (photoData && photoData.status === "success" && photoData.photoLink) {
+              finalReceiptId = photoData.photoLink;
+              console.log("Uploaded successfully. Using cloud photo link as Receipt ID:", finalReceiptId);
+            }
+          }
+        } catch (err) {
+          console.warn("Could not retrieve cloud photo link directly. Falling back to local Receipt ID for grouping:", err);
+        }
+      }
+
       ocrProgress.innerText = "Syncing items to Google Sheets...";
 
       // Perform parallel POST requests to the Google Sheets Web App
@@ -1200,8 +1269,8 @@ Example JSON structure:
           paidBy: payer,
           cost: Math.round(item.price * currentTaxMultiplier),
           assignedTo: item.assignedTo,
-          receiptId: receiptId, // Save receipt ID association in Google Sheets
-          receiptPhoto: currentReceiptPhotoBase64 || ''
+          receiptId: finalReceiptId, // Save receipt ID association in Google Sheets
+          receiptPhoto: '' // Do not upload photo again
         };
         return fetch(syncUrl, {
           method: 'POST',
@@ -1226,7 +1295,7 @@ Example JSON structure:
             paidBy: payer,
             cost: Math.round(item.price * currentTaxMultiplier),
             assignedTo: item.assignedTo,
-            receiptId: receiptId
+            receiptId: finalReceiptId
           });
         });
         saveLedger();
@@ -1240,7 +1309,7 @@ Example JSON structure:
           paidBy: payer,
           cost: Math.round(item.price * currentTaxMultiplier),
           assignedTo: item.assignedTo,
-          receiptId: receiptId
+          receiptId: finalReceiptId
         });
       });
       saveLedger();
