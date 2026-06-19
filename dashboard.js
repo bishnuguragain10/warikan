@@ -478,8 +478,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let domain = '';
     try {
       const parsedUrl = new URL(url);
-      const parts = parsedUrl.hostname.split('.');
-      domain = parts.length >= 2 ? parts.slice(-2).join('.') : parsedUrl.hostname;
+      let hostname = parsedUrl.hostname.toLowerCase();
+      if (hostname.startsWith('www.')) {
+        hostname = hostname.substring(4);
+      }
+      domain = hostname;
     } catch (err) {
       alert('Please enter a valid website link (including https://).');
       return;

@@ -37,16 +37,15 @@ const CATEGORY_MAP = [
   }
 ];
 
-// Helper to extract base domain (e.g. "https://sub.domain.com/path" -> "domain.com")
+// Helper to extract base domain (e.g. "https://sub.domain.com/path" -> "sub.domain.com")
 function getBaseDomain(urlStr) {
   try {
     const url = new URL(urlStr);
-    const parts = url.hostname.split('.');
-    if (parts.length >= 2) {
-      // Returns e.g. "github.com" or "google.com"
-      return parts.slice(-2).join('.');
+    let hostname = url.hostname.toLowerCase();
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
     }
-    return url.hostname;
+    return hostname;
   } catch (e) {
     return urlStr;
   }
