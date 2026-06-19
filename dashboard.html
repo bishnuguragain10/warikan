@@ -64,6 +64,10 @@
           <span>🌐 General Sites</span>
           <span class="count" id="count-general">0</span>
         </button>
+        <button class="nav-item" data-category="👤 My Personal Sites">
+          <span>👤 Personal Sites</span>
+          <span class="count" id="count-personal">0</span>
+        </button>
       </nav>
 
       <div class="sidebar-footer">
@@ -170,6 +174,7 @@
             <option value="🎥 Entertainment & Media">🎥 Entertainment & Media</option>
             <option value="💼 Work & Productivity">💼 Work & Productivity</option>
             <option value="🌐 General / Personal Website">🌐 General / Personal Website</option>
+            <option value="👤 My Personal Sites">👤 My Personal Sites</option>
           </select>
         </div>
 
@@ -212,7 +217,7 @@
         </ol>
 
         <div class="code-box-header">
-          <span>google_apps_script.js Code</span>
+          <span>launchpad_apps_script.js Code</span>
           <button id="btn-copy-code" class="copy-btn">Copy Code</button>
         </div>
         <pre class="code-box"><code id="code-snippet">
@@ -249,7 +254,8 @@ function doGet(e) {
         description: String(row[2]),
         url: url,
         domain: String(row[4]),
-        timestamp: row[5] ? new Date(row[5]).toISOString() : new Date().toISOString()
+        timestamp: row[5] ? new Date(row[5]).toISOString() : new Date().toISOString(),
+        isFavorite: row[6] ? (String(row[6]).toLowerCase() === "true") : false
       });
     }
     
@@ -274,7 +280,7 @@ function respondJson(data, e) {
   }
 }
 
-// 2. POST REQUEST: Saves, edits, or deletes websites from Chrome Extension or Mobile browser (Duplicate-Safe)
+// 2. POST REQUEST: Saves, edits, deletes, or favorites websites from Chrome Extension or Mobile browser (Duplicate-Safe)
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
@@ -282,11 +288,26 @@ function doPost(e) {
     
     // Set headers if empty sheet
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(["Website Name", "Category", "Description", "Clickable Launch Link", "Domain Key", "Date Added"]);
-      sheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#e0e7ff");
+      sheet.appendRow(["Website Name", "Category", "Description", "Clickable Launch Link", "Domain Key", "Date Added", "Favorite"]);
+      sheet.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#e0e7ff");
     }
     
-    // 1. ACTION: DELETE
+    // 1. ACTION: FAVORITE
+    if (data.action === "favorite") {
+      const rows = sheet.getDataRange().getValues();
+      let updated = false;
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][4]).toLowerCase() === String(data.domain).toLowerCase()) {
+          sheet.getRange(i + 1, 7).setValue(data.isFavorite ? "TRUE" : "FALSE");
+          updated = true;
+          break;
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Favorite updated"}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // 2. ACTION: DELETE
     if (data.action === "delete") {
       const rows = sheet.getDataRange().getValues();
       let deletedCount = 0;
@@ -300,7 +321,7 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     
-    // 2. ACTION: EDIT / UPDATE
+    // 3. ACTION: EDIT / UPDATE
     if (data.action === "edit") {
       const rows = sheet.getDataRange().getValues();
       let updated = false;
@@ -317,6 +338,7 @@ function doPost(e) {
           sheet.getRange(rowIndex, 4).setValue(linkFormula);
           sheet.getRange(rowIndex, 5).setValue(data.domain);
           sheet.getRange(rowIndex, 6).setValue(new Date(data.timestamp).toLocaleString());
+          sheet.getRange(rowIndex, 7).setValue(data.isFavorite ? "TRUE" : "FALSE");
           
           updated = true;
           break;
@@ -329,7 +351,7 @@ function doPost(e) {
       }
     }
     
-    // 3. FALLBACK: STANDARD DUPLICATE-SAFE ADD
+    // 4. FALLBACK: STANDARD DUPLICATE-SAFE ADD
     const rows = sheet.getDataRange().getValues();
     let isDuplicate = false;
     let duplicateRowIndex = -1;
@@ -345,6 +367,7 @@ function doPost(e) {
       sheet.getRange(duplicateRowIndex, 1).setValue(data.title);
       sheet.getRange(duplicateRowIndex, 3).setValue(data.description);
       sheet.getRange(duplicateRowIndex, 6).setValue(new Date(data.timestamp).toLocaleString());
+      sheet.getRange(duplicateRowIndex, 7).setValue(data.isFavorite ? "TRUE" : "FALSE");
       
       return ContentService.createTextOutput(JSON.stringify({status: "success", message: "Duplicate domain updated"}))
         .setMimeType(ContentService.MimeType.JSON);
@@ -357,7 +380,8 @@ function doPost(e) {
       data.description,
       linkFormula,
       data.domain,
-      new Date(data.timestamp).toLocaleString()
+      new Date(data.timestamp).toLocaleString(),
+      data.isFavorite ? "TRUE" : "FALSE"
     ]);
     
     return ContentService.createTextOutput(JSON.stringify({status: "success"}))

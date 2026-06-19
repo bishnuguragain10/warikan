@@ -161,7 +161,8 @@ document.addEventListener('DOMContentLoaded', () => {
       '📱 Social Media & Networking': 0,
       '🎥 Entertainment & Media': 0,
       '💼 Work & Productivity': 0,
-      '🌐 General / Personal Website': 0
+      '🌐 General / Personal Website': 0,
+      '👤 My Personal Sites': 0
     };
 
     allSites.forEach(site => {
@@ -182,6 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('count-media').innerText = counts['🎥 Entertainment & Media'];
     document.getElementById('count-work').innerText = counts['💼 Work & Productivity'];
     document.getElementById('count-general').innerText = counts['🌐 General / Personal Website'];
+    document.getElementById('count-personal').innerText = counts['👤 My Personal Sites'];
   }
 
   // Helper to match category-specific styling tags
@@ -192,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case '🎥 AI Video & Audio': return 'badge-videos';
       case '💻 Developer Tools & Cloud': return 'badge-dev';
       case '🛍️ E-Commerce & Shopping': return 'badge-shop';
+      case '👤 My Personal Sites': return 'badge-personal';
       default: return '';
     }
   }
@@ -222,6 +225,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Sort: Favorites first, then newest first
+    filteredSites.sort((a, b) => {
+      const aFav = a.isFavorite ? 1 : 0;
+      const bFav = b.isFavorite ? 1 : 0;
+      if (aFav !== bFav) {
+        return bFav - aFav;
+      }
+      return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+    });
+
     platformGrid.style.display = 'grid';
     emptyState.style.display = 'none';
 
@@ -232,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       const badgeClass = getBadgeClass(site.category);
       const faviconUrl = `https://www.google.com/s2/favicons?sz=64&domain=${site.domain}`;
+      const isFav = site.isFavorite === true;
 
       card.innerHTML = `
         <div class="card-header">
@@ -242,6 +256,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <h3 class="card-name">${escapeHTML(site.title)}</h3>
             <span class="card-domain">${escapeHTML(site.domain)}</span>
           </div>
+          <button class="btn-favorite ${isFav ? 'active' : ''}" data-domain="${site.domain}" title="${isFav ? 'Remove from favorites' : 'Mark as favorite'}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="${isFav ? 'var(--accent-amber)' : 'none'}" stroke="${isFav ? 'var(--accent-amber)' : 'var(--text-dim)'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </button>
         </div>
         <div class="card-badge ${badgeClass}">${escapeHTML(site.category)}</div>
         <p class="card-body">${escapeHTML(site.description)}</p>
@@ -268,6 +287,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const y = e.clientY - rect.top;
         card.style.setProperty('--x', `${x}px`);
         card.style.setProperty('--y', `${y}px`);
+      });
+
+      // Bind favorite action
+      card.querySelector('.btn-favorite').addEventListener('click', (e) => {
+        const domainToFav = e.currentTarget.getAttribute('data-domain');
+        toggleFavorite(domainToFav);
       });
 
       // Bind edit action
@@ -329,6 +354,35 @@ document.addEventListener('DOMContentLoaded', () => {
     addForm.querySelector('button[type="submit"]').innerText = "Update Web Platform";
     
     addModal.classList.add('active');
+  }
+
+  // 4c. Toggle Favorite Action (local and remote Sheets sync)
+  function toggleFavorite(domain) {
+    const index = allSites.findIndex(site => site.domain === domain);
+    if (index === -1) return;
+
+    allSites[index].isFavorite = !allSites[index].isFavorite;
+
+    getStorageData(['sheetsWebhookUrl'], (result) => {
+      setStorageData({ savedSites: allSites }, () => {
+        renderGrid();
+
+        const webhookUrl = result.sheetsWebhookUrl;
+        if (webhookUrl) {
+          fetch(webhookUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'favorite',
+              domain: domain,
+              isFavorite: allSites[index].isFavorite
+            })
+          }).then(() => console.log('Automated Favorite Sync successful.'))
+            .catch(err => console.error('Automated favorite sync failed:', err));
+        }
+      });
+    });
   }
 
   // Mobile drawer controls
@@ -500,10 +554,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (editingDomain) {
       // EDIT MODE
       const index = allSites.findIndex(site => site.domain === editingDomain);
+      const existingFav = index !== -1 ? (allSites[index].isFavorite || false) : false;
+      const recordToSave = {
+        ...newRecord,
+        isFavorite: existingFav
+      };
+
       if (index !== -1) {
-        allSites[index] = newRecord;
+        allSites[index] = recordToSave;
       } else {
-        allSites.push(newRecord);
+        allSites.push(recordToSave);
       }
 
       getStorageData(['sheetsWebhookUrl'], (result) => {
@@ -525,7 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
               body: JSON.stringify({
                 action: 'edit',
                 originalDomain: original,
-                ...newRecord
+                ...recordToSave
               })
             }).then(() => console.log('Automated Edit Sync successful.'))
               .catch(err => console.error('Automated edit sync failed:', err));
@@ -535,13 +595,19 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       // ADD MODE
       const duplicateIndex = allSites.findIndex(site => site.domain === domain);
+      const existingFav = duplicateIndex !== -1 ? (allSites[duplicateIndex].isFavorite || false) : false;
+      const recordToSave = {
+        ...newRecord,
+        isFavorite: existingFav
+      };
+
       if (duplicateIndex !== -1) {
         if (!confirm('A saved platform with this domain already exists. Do you want to update it?')) {
           return;
         }
-        allSites[duplicateIndex] = newRecord;
+        allSites[duplicateIndex] = recordToSave;
       } else {
-        allSites.push(newRecord);
+        allSites.push(recordToSave);
       }
 
       getStorageData(['sheetsWebhookUrl'], (result) => {
@@ -558,7 +624,7 @@ document.addEventListener('DOMContentLoaded', () => {
               method: 'POST',
               mode: 'no-cors',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(newRecord)
+              body: JSON.stringify(recordToSave)
             }).then(() => console.log('Automated Add Sync successful.'))
               .catch(err => console.error('Automated add sync failed:', err));
           }

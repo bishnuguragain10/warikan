@@ -142,26 +142,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const existingIndex = savedSites.findIndex(site => site.domain === domain);
       const isNewDomain = (existingIndex === -1);
       const shouldSync = isNewDomain || message.forceSync === true;
+      const existingFav = existingIndex !== -1 ? (savedSites[existingIndex].isFavorite || false) : false;
+      
+      const recordToSave = {
+        ...finalRecord,
+        isFavorite: existingFav
+      };
       
       if (existingIndex !== -1) {
         // Update details if it's already there
         savedSites[existingIndex].timestamp = finalRecord.timestamp;
+        savedSites[existingIndex].title = finalRecord.title;
+        savedSites[existingIndex].url = finalRecord.url;
+        savedSites[existingIndex].category = finalRecord.category;
+        
         // Keep the best description
-        if (finalRecord.description !== "No description loaded." && savedSites[existingIndex].description === "No description loaded.") {
+        if (finalRecord.description !== "No description loaded.") {
           savedSites[existingIndex].description = finalRecord.description;
         }
       } else {
         // Push new entry
-        savedSites.push(finalRecord);
+        savedSites.push(recordToSave);
       }
 
       // Save back to Chrome local storage
       chrome.storage.local.set({ savedSites: savedSites }, () => {
-        console.log('Successfully saved to Local Storage:', finalRecord);
+        console.log('Successfully saved to Local Storage:', recordToSave);
         
         // Push to Google Sheets if linked and it is a new domain or forced sync
         if (webhookUrl && shouldSync) {
-          syncToGoogleSheets(webhookUrl, finalRecord);
+          syncToGoogleSheets(webhookUrl, existingIndex !== -1 ? savedSites[existingIndex] : recordToSave);
         }
       });
     });
