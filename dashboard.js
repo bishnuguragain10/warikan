@@ -225,18 +225,27 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Sort: Favorites first, then newest first
+    // Sort: Personal sites first, then Favorites, then newest first
     filteredSites.sort((a, b) => {
+      const aPers = (a.category === '👤 My Personal Sites') ? 1 : 0;
+      const bPers = (b.category === '👤 My Personal Sites') ? 1 : 0;
+      if (aPers !== bPers) {
+        return bPers - aPers; // Personal sites first
+      }
+
       const aFav = a.isFavorite ? 1 : 0;
       const bFav = b.isFavorite ? 1 : 0;
       if (aFav !== bFav) {
-        return bFav - aFav;
+        return bFav - aFav; // Favorites next
       }
+
       return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
     });
 
     platformGrid.style.display = 'grid';
     emptyState.style.display = 'none';
+
+    const categories = Array.from(document.getElementById('add-category').options).map(opt => opt.value);
 
     // Generate Cards
     filteredSites.forEach((site) => {
@@ -246,6 +255,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const badgeClass = getBadgeClass(site.category);
       const faviconUrl = `https://www.google.com/s2/favicons?sz=64&domain=${site.domain}`;
       const isFav = site.isFavorite === true;
+
+      const categoryOptionsHtml = categories.map(cat => {
+        return `<option value="${escapeHTML(cat)}" ${cat === site.category ? 'selected' : ''}>${escapeHTML(cat)}</option>`;
+      }).join('');
 
       card.innerHTML = `
         <div class="card-header">
@@ -262,7 +275,9 @@ document.addEventListener('DOMContentLoaded', () => {
             </svg>
           </button>
         </div>
-        <div class="card-badge ${badgeClass}">${escapeHTML(site.category)}</div>
+        <select class="card-badge ${badgeClass} category-select" data-domain="${site.domain}" title="Change category">
+          ${categoryOptionsHtml}
+        </select>
         <p class="card-body">${escapeHTML(site.description)}</p>
         <div class="card-actions">
           <a href="${site.url}" target="_blank" class="btn-launch">
@@ -287,6 +302,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const y = e.clientY - rect.top;
         card.style.setProperty('--x', `${x}px`);
         card.style.setProperty('--y', `${y}px`);
+      });
+
+      // Bind category change action
+      card.querySelector('.category-select').addEventListener('change', (e) => {
+        const domainToMove = e.currentTarget.getAttribute('data-domain');
+        const newCategory = e.currentTarget.value;
+        changeCategory(domainToMove, newCategory);
       });
 
       // Bind favorite action
@@ -380,6 +402,40 @@ document.addEventListener('DOMContentLoaded', () => {
             })
           }).then(() => console.log('Automated Favorite Sync successful.'))
             .catch(err => console.error('Automated favorite sync failed:', err));
+        }
+      });
+    });
+  }
+
+  // 4d. Inline Category Changer Sync
+  function changeCategory(domain, newCategory) {
+    const index = allSites.findIndex(site => site.domain === domain);
+    if (index === -1) return;
+
+    const originalCategory = allSites[index].category;
+    if (originalCategory === newCategory) return;
+
+    const siteRecord = allSites[index];
+    siteRecord.category = newCategory;
+
+    getStorageData(['sheetsWebhookUrl'], (result) => {
+      setStorageData({ savedSites: allSites }, () => {
+        calculateCategoryCounts();
+        renderGrid();
+
+        const webhookUrl = result.sheetsWebhookUrl;
+        if (webhookUrl) {
+          fetch(webhookUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'edit',
+              originalDomain: domain,
+              ...siteRecord
+            })
+          }).then(() => console.log('Category move synced to Google Sheets.'))
+            .catch(err => console.error('Category move sync failed:', err));
         }
       });
     });
