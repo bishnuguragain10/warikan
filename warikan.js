@@ -103,6 +103,9 @@ const JPN_DICTIONARY = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Global edit state for manual entry modal
+  let editingItemIndex = null;
+
   // Elements
   const dropZone = document.getElementById('drop-zone');
   const fileInput = document.getElementById('file-input');
@@ -1396,16 +1399,60 @@ Example JSON structure:
   });
 
   // --- MANUAL EXPENSE ENTRY ACTION ---
+  function openEditManualModal(idx) {
+    const item = currentLedger[idx];
+    editingItemIndex = idx;
+    
+    // Update labels in modal
+    const modalTitle = document.querySelector('#manual-modal h2');
+    const submitBtn = document.querySelector('#manual-modal button[type="submit"]');
+    if (modalTitle) modalTitle.innerText = "Edit Roommate Expense";
+    if (submitBtn) submitBtn.innerText = "Update Expense";
+    
+    // Pre-fill inputs
+    document.getElementById('manual-date').value = item.date || new Date().toISOString().slice(0, 10);
+    document.getElementById('manual-split').value = item.assignedTo || 'shared';
+    document.getElementById('manual-store').value = item.store || '';
+    
+    const paidBInput = document.getElementById('manual-paid-b');
+    const paidRInput = document.getElementById('manual-paid-r');
+    
+    if (item.paidBy === 'Bishnu') {
+      paidBInput.value = item.cost;
+      paidRInput.value = 0;
+    } else if (item.paidBy === 'Radha') {
+      paidBInput.value = 0;
+      paidRInput.value = item.cost;
+    } else {
+      paidBInput.value = item.paidB || 0;
+      paidRInput.value = item.paidR || 0;
+    }
+    
+    // Open modal
+    manualModal.classList.add('active');
+  }
+
+  function closeManualModalHandler() {
+    manualModal.classList.remove('active');
+    
+    // Reset labels and states
+    editingItemIndex = null;
+    const modalTitle = document.querySelector('#manual-modal h2');
+    const submitBtn = document.querySelector('#manual-modal button[type="submit"]');
+    if (modalTitle) modalTitle.innerText = "Log Manual Roommate Expense";
+    if (submitBtn) submitBtn.innerText = "Add Expense to Ledger";
+  }
+
   btnManualForm.addEventListener('click', () => {
     // Default today's date in form input
     document.getElementById('manual-date').value = new Date().toISOString().slice(0, 10);
     manualModal.classList.add('active');
   });
 
-  closeManualModal.addEventListener('click', () => manualModal.classList.remove('active'));
+  closeManualModal.addEventListener('click', closeManualModalHandler);
 
   window.addEventListener('click', (e) => {
-    if (e.target === manualModal) manualModal.classList.remove('active');
+    if (e.target === manualModal) closeManualModalHandler();
   });
 
   manualForm.addEventListener('submit', (e) => {
@@ -1438,15 +1485,25 @@ Example JSON structure:
     };
 
     const syncUrl = localStorage.getItem('warikanSyncUrl');
-    if (syncUrl) {
-      postExpenseToCloud(newItem);
+    if (editingItemIndex !== null) {
+      const originalItem = currentLedger[editingItemIndex];
+      if (syncUrl) {
+        editExpenseOnCloud(originalItem, newItem);
+      } else {
+        currentLedger[editingItemIndex] = newItem;
+        saveLedger();
+      }
     } else {
-      currentLedger.push(newItem);
-      saveLedger();
+      if (syncUrl) {
+        postExpenseToCloud(newItem);
+      } else {
+        currentLedger.push(newItem);
+        saveLedger();
+      }
     }
 
     manualForm.reset();
-    manualModal.classList.remove('active');
+    closeManualModalHandler();
   });
 
   // Helper to generate a unique footprint for transactions to enable resilient filtering
@@ -1506,6 +1563,44 @@ Example JSON structure:
       // Fail-safe: Save locally
       currentLedger.push(item);
       saveLedger();
+    }
+  }
+
+  async function editExpenseOnCloud(originalItem, newItem) {
+    const syncUrl = localStorage.getItem('warikanSyncUrl');
+    if (!syncUrl) return;
+
+    settlementBanner.innerHTML = `
+      <div class="settlement-loader">
+        <div class="spinner" style="width:14px; height:16px;"></div>
+        <span>Updating in Cloud Sheet...</span>
+      </div>
+    `;
+
+    try {
+      await fetch(syncUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'edit',
+          originalItem: originalItem,
+          newItem: newItem
+        })
+      });
+      console.log("Edit request posted to cloud for item:", originalItem, "new values:", newItem);
+      
+      // Fetch latest from cloud to reflect the updates
+      fetchLedgerFromCloud();
+    } catch (error) {
+      console.error("Error editing expense on cloud:", error);
+      // Fallback: save locally
+      if (editingItemIndex !== null) {
+        currentLedger[editingItemIndex] = newItem;
+        saveLedger();
+      }
     }
   }
 
@@ -2087,11 +2182,21 @@ Example JSON structure:
           <td style="text-align: right; color:#818cf8;">¥${Math.round(bShare).toLocaleString()}</td>
           <td style="text-align: right; color:#f472b6;">¥${Math.round(rShare).toLocaleString()}</td>
           <td style="text-align: center;">
-            <button class="btn-trash btn-trash-single" data-index="${mainIndex}" title="Delete expense">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
+            <div style="display: inline-flex; align-items: center; gap: 4px;">
+              <button class="btn-edit btn-edit-single" data-index="${mainIndex}" title="Edit expense" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); color: #c084fc; border-radius: 4px; padding: 4px 6px; font-size: 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; outline: none;">
+                ✏️
+              </button>
+              <button class="btn-trash btn-trash-single" data-index="${mainIndex}" title="Delete expense">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
           </td>
         `;
+
+        tr.querySelector('.btn-edit-single').addEventListener('click', (e) => {
+          const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+          openEditManualModal(idx);
+        });
 
         tr.querySelector('.btn-trash-single').addEventListener('click', (e) => {
           const idx = parseInt(e.currentTarget.getAttribute('data-index'));

@@ -39,12 +39,30 @@ function doGet(e) {
       if (rawSplit.includes("bishnu")) assignedTo = "Bishnu";
       else if (rawSplit.includes("radha")) assignedTo = "Radha";
       
+      // Parse paidBy and split details
+      let paidBy = String(row[4]);
+      if (paidBy.includes("Bishnu")) paidBy = "Bishnu";
+      else if (paidBy.includes("Radha")) paidBy = "Radha";
+      else if (paidBy.includes("Custom")) paidBy = "Custom";
+
+      let paidB = row[7] ? parseInt(row[7]) || 0 : 0;
+      let paidR = row[8] ? parseInt(row[8]) || 0 : 0;
+      
+      // Fallback 50/50 split for legacy Custom rows
+      if (paidBy === "Custom" && paidB === 0 && paidR === 0) {
+        const totalCost = parseInt(row[3]) || 0;
+        paidB = Math.round(totalCost / 2);
+        paidR = totalCost - paidB;
+      }
+      
       // Reconstruct transaction object
       ledgerData.push({
         store: String(row[0]) + (row[2] ? " - " + row[2] : ""), // Title + description
         assignedTo: assignedTo,
         cost: parseInt(row[3]) || 0,
-        paidBy: String(row[4]).includes("Bishnu") ? "Bishnu" : "Radha",
+        paidBy: paidBy,
+        paidB: paidB,
+        paidR: paidR,
         date: dateString,
         receiptId: row[6] ? String(row[6]) : "" // 7th Column: Receipt ID
       });
@@ -84,11 +102,11 @@ function doPost(e) {
     
     // Set headers if empty sheet
     if (sheet.getLastRow() === 0) {
-      const headers = ["Item Description", "Split Assignment", "Raw Description", "Cost (Yen)", "Paid By", "Date Added", "Receipt ID"];
+      const headers = ["Item Description", "Split Assignment", "Raw Description", "Cost (Yen)", "Paid By", "Date Added", "Receipt ID", "Bishnu Paid", "Radha Paid"];
       sheet.appendRow(headers);
       
       // Apply styling to header
-      const headerRange = sheet.getRange(1, 1, 1, 7);
+      const headerRange = sheet.getRange(1, 1, 1, 9);
       headerRange.setFontWeight("bold");
       headerRange.setFontColor("#ffffff");
       headerRange.setBackgroundColor("#4f46e5");
@@ -101,6 +119,8 @@ function doPost(e) {
       sheet.setColumnWidth(5, 120);
       sheet.setColumnWidth(6, 160);
       sheet.setColumnWidth(7, 180);
+      sheet.setColumnWidth(8, 120);
+      sheet.setColumnWidth(9, 120);
     }
 
     // A. HANDLE DELETION
@@ -122,7 +142,11 @@ function doPost(e) {
         
         const rowStoreMerged = String(row[0]) + (row[2] ? " - " + row[2] : "");
         const rowCost = parseInt(row[3]) || 0;
-        const rowPaidBy = String(row[4]).includes("Bishnu") ? "Bishnu" : "Radha";
+        
+        let rowPaidBy = String(row[4]);
+        if (rowPaidBy.includes("Bishnu")) rowPaidBy = "Bishnu";
+        else if (rowPaidBy.includes("Radha")) rowPaidBy = "Radha";
+        else if (rowPaidBy.includes("Custom")) rowPaidBy = "Custom";
         
         if (rowStoreMerged === item.store &&
             rowCost === item.cost &&
@@ -199,6 +223,62 @@ function doPost(e) {
       }
     }
     
+    // E. HANDLE EDIT / UPDATE TRANSACTION
+    if (data.action === "edit") {
+      const originalItem = data.originalItem;
+      const newItem = data.newItem;
+      const rows = sheet.getDataRange().getValues();
+      let updated = false;
+      
+      for (let i = rows.length - 1; i >= 1; i--) {
+        const row = rows[i];
+        
+        let dateString = "";
+        if (row[5]) {
+          try {
+            dateString = new Date(row[5]).toISOString().slice(0, 10);
+          } catch (err) {}
+        }
+        
+        const rowStoreMerged = String(row[0]);
+        const rowCost = parseInt(row[3]) || 0;
+        
+        let rowPaidBy = String(row[4]);
+        if (rowPaidBy.includes("Bishnu")) rowPaidBy = "Bishnu";
+        else if (rowPaidBy.includes("Radha")) rowPaidBy = "Radha";
+        else if (rowPaidBy.includes("Custom")) rowPaidBy = "Custom";
+        
+        if (rowStoreMerged === originalItem.store &&
+            rowCost === originalItem.cost &&
+            rowPaidBy === originalItem.paidBy &&
+            (dateString === originalItem.date || !originalItem.date)) {
+          
+          const rowIndex = i + 1; // 1-indexed in sheet
+          sheet.getRange(rowIndex, 1).setValue(newItem.store);
+          sheet.getRange(rowIndex, 2).setValue(newItem.assignedTo);
+          sheet.getRange(rowIndex, 3).setValue(newItem.description || "");
+          sheet.getRange(rowIndex, 4).setValue(newItem.cost);
+          sheet.getRange(rowIndex, 5).setValue(newItem.paidBy);
+          sheet.getRange(rowIndex, 6).setValue(newItem.date);
+          // Column 7 (Receipt ID) remains unchanged
+          sheet.getRange(rowIndex, 8).setValue(newItem.paidB || 0);
+          sheet.getRange(rowIndex, 9).setValue(newItem.paidR || 0);
+          
+          // Format alignments
+          sheet.getRange(rowIndex, 4).setHorizontalAlignment("right"); // Cost
+          sheet.getRange(rowIndex, 5).setHorizontalAlignment("center"); // Paid By
+          sheet.getRange(rowIndex, 6).setHorizontalAlignment("center"); // Date
+          sheet.getRange(rowIndex, 8).setHorizontalAlignment("right"); // Bishnu Paid
+          sheet.getRange(rowIndex, 9).setHorizontalAlignment("right"); // Radha Paid
+          
+          updated = true;
+          break; // Only update the first match
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({status: "success", updated: updated}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     // C. DEFAULT: APPEND NEW TRANSACTION ROW
     let photoLink = data.receiptId || "";
     
@@ -227,7 +307,9 @@ function doPost(e) {
       data.cost,
       data.paidBy,
       data.date,
-      photoLink // Save either Google Drive direct download link or unique local ID
+      photoLink, // Save either Google Drive direct download link or unique local ID
+      data.paidB || 0, // Column 8: Bishnu Paid
+      data.paidR || 0  // Column 9: Radha Paid
     ]);
     
     // Align values
@@ -236,6 +318,8 @@ function doPost(e) {
     sheet.getRange(lastRow, 5).setHorizontalAlignment("center"); // Paid By
     sheet.getRange(lastRow, 6).setHorizontalAlignment("center"); // Date
     sheet.getRange(lastRow, 7).setHorizontalAlignment("center"); // Receipt ID
+    sheet.getRange(lastRow, 8).setHorizontalAlignment("right"); // Bishnu Paid
+    sheet.getRange(lastRow, 9).setHorizontalAlignment("right"); // Radha Paid
     
     return ContentService.createTextOutput(JSON.stringify({status: "success"}))
       .setMimeType(ContentService.MimeType.JSON);
