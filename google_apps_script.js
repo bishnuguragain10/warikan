@@ -254,22 +254,21 @@ function doPost(e) {
             (dateString === originalItem.date || !originalItem.date)) {
           
           const rowIndex = i + 1; // 1-indexed in sheet
-          sheet.getRange(rowIndex, 1).setValue(newItem.store);
-          sheet.getRange(rowIndex, 2).setValue(newItem.assignedTo);
-          sheet.getRange(rowIndex, 3).setValue(newItem.description || "");
-          sheet.getRange(rowIndex, 4).setValue(newItem.cost);
-          sheet.getRange(rowIndex, 5).setValue(newItem.paidBy);
-          sheet.getRange(rowIndex, 6).setValue(newItem.date);
-          // Column 7 (Receipt ID) remains unchanged
-          sheet.getRange(rowIndex, 8).setValue(newItem.paidB || 0);
-          sheet.getRange(rowIndex, 9).setValue(newItem.paidR || 0);
           
-          // Format alignments
-          sheet.getRange(rowIndex, 4).setHorizontalAlignment("right"); // Cost
-          sheet.getRange(rowIndex, 5).setHorizontalAlignment("center"); // Paid By
-          sheet.getRange(rowIndex, 6).setHorizontalAlignment("center"); // Date
-          sheet.getRange(rowIndex, 8).setHorizontalAlignment("right"); // Bishnu Paid
-          sheet.getRange(rowIndex, 9).setHorizontalAlignment("right"); // Radha Paid
+          // Group edits into 2 batched setValues calls to minimize Sheets API roundtrips
+          sheet.getRange(rowIndex, 1, 1, 6).setValues([[
+            newItem.store,
+            newItem.assignedTo,
+            newItem.description || "",
+            newItem.cost,
+            newItem.paidBy,
+            newItem.date
+          ]]);
+          
+          sheet.getRange(rowIndex, 8, 1, 2).setValues([[
+            newItem.paidB || 0,
+            newItem.paidR || 0
+          ]]);
           
           updated = true;
           break; // Only update the first match
@@ -312,14 +311,16 @@ function doPost(e) {
       data.paidR || 0  // Column 9: Radha Paid
     ]);
     
-    // Align values
+    // Batch alignments into a single API write
     const lastRow = sheet.getLastRow();
-    sheet.getRange(lastRow, 4).setHorizontalAlignment("right"); // Cost
-    sheet.getRange(lastRow, 5).setHorizontalAlignment("center"); // Paid By
-    sheet.getRange(lastRow, 6).setHorizontalAlignment("center"); // Date
-    sheet.getRange(lastRow, 7).setHorizontalAlignment("center"); // Receipt ID
-    sheet.getRange(lastRow, 8).setHorizontalAlignment("right"); // Bishnu Paid
-    sheet.getRange(lastRow, 9).setHorizontalAlignment("right"); // Radha Paid
+    sheet.getRange(lastRow, 4, 1, 6).setHorizontalAlignments([[
+      "right",   // Column 4: Cost
+      "center",  // Column 5: Paid By
+      "center",  // Column 6: Date
+      "center",  // Column 7: Receipt ID
+      "right",   // Column 8: Bishnu Paid
+      "right"    // Column 9: Radha Paid
+    ]]);
     
     return ContentService.createTextOutput(JSON.stringify({status: "success"}))
       .setMimeType(ContentService.MimeType.JSON);
